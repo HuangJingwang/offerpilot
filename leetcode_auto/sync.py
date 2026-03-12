@@ -23,6 +23,7 @@
 
 import argparse
 import json
+import os
 import platform
 import re
 import signal
@@ -164,7 +165,8 @@ def browser_login() -> dict:
     return {"username": username, "session": session_val, "csrf": csrf_val}
 
 
-def ensure_credentials() -> dict:
+def ensure_credentials(interactive: bool = True) -> dict:
+    """加载并验证凭证。interactive=False 时不弹浏览器，凭证失效则返回空。"""
     creds = load_credentials()
     if creds["session"]:
         print("正在检查登录状态...")
@@ -173,8 +175,14 @@ def ensure_credentials() -> dict:
             print(f"已登录：{username}\n")
             creds["username"] = username
             return creds
+        if not interactive:
+            print("Cookie 已过期，请手动运行 leetcode --login 重新登录。")
+            return {}
         print("Cookie 已过期，需要重新登录。\n")
     else:
+        if not interactive:
+            print("未找到登录凭证，请手动运行 leetcode --login 登录。")
+            return {}
         print("未找到登录凭证，需要登录。\n")
     return browser_login()
 
@@ -630,14 +638,17 @@ def send_notification(title: str, message: str):
 # ---------------------------------------------------------------------------
 
 
-def sync():
+def sync(interactive: bool = True):
     today = datetime.now(CST)
     today_str = today.strftime("%Y-%m-%d")
     today_date = today.date()
     print(f"=== LeetCode Hot100 每日同步 ({today_str}) ===\n")
 
     ensure_plan_files(PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE)
-    creds = ensure_credentials()
+    creds = ensure_credentials(interactive=interactive)
+    if not creds:
+        send_notification("LeetCode 同步失败", "Cookie 已过期，请运行 leetcode --login")
+        return
     username = creds["username"]
 
     print(f"1. 正在从 LeetCode CN 获取 {username} 的最近 AC 记录...")
@@ -752,7 +763,7 @@ def cron_loop(time_str: str):
         print("错误：时间格式应为 HH:MM，例如 23:00")
         sys.exit(1)
 
-    schedule.every().day.at(time_str).do(sync)
+    schedule.every().day.at(time_str).do(lambda: sync(interactive=False))
     print(f"=== 定时任务已启动，每天 {time_str} 自动同步 ===")
     print("按 Ctrl+C 停止\n")
 
@@ -881,7 +892,8 @@ def main():
     elif args.cron:
         cron_loop(args.cron)
     else:
-        sync()
+        is_background = os.environ.get("LEETFORGE_DAEMON") == "1"
+        sync(interactive=not is_background)
 
 
 if __name__ == "__main__":

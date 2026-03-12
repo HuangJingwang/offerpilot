@@ -179,6 +179,8 @@ def _plist_content(sched: Schedule) -> str:
     <dict>
         <key>PATH</key>
         <string>{path_env}</string>
+        <key>LEETFORGE_DAEMON</key>
+        <string>1</string>
     </dict>
 </dict>
 </plist>"""
@@ -259,7 +261,8 @@ def _install_linux(sched: Schedule):
         f"ExecStart={lc_bin}\n"
         f"StandardOutput=append:{LOG_FILE}\n"
         f"StandardError=append:{LOG_FILE}\n"
-        f"Environment=PATH={os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}\n",
+        f"Environment=PATH={os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}\n"
+        f"Environment=LEETFORGE_DAEMON=1\n",
         encoding="utf-8",
     )
     _TIMER_FILE.write_text(
@@ -327,18 +330,19 @@ _TASK_NAME = "LeetForge-Sync"
 
 def _install_windows(sched: Schedule):
     lc_bin = _find_leetcode_bin()
+    wrapped = f'cmd /c "set LEETFORGE_DAEMON=1 && {lc_bin}"'
 
     if sched.mode == "interval":
         mins = sched.interval_seconds // 60
         cmd = [
             "schtasks", "/create", "/tn", _TASK_NAME,
-            "/tr", lc_bin, "/sc", "minute", "/mo", str(mins), "/f",
+            "/tr", wrapped, "/sc", "minute", "/mo", str(mins), "/f",
         ]
     else:
         time_str = f"{sched.hour:02d}:{sched.minute:02d}"
         cmd = [
             "schtasks", "/create", "/tn", _TASK_NAME,
-            "/tr", lc_bin, "/sc", "daily", "/st", time_str, "/f",
+            "/tr", wrapped, "/sc", "daily", "/st", time_str, "/f",
         ]
 
     subprocess.run(cmd, check=True)
