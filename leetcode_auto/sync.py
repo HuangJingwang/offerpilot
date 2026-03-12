@@ -60,10 +60,19 @@ REVIEW_INTERVALS = {
 # ---------------------------------------------------------------------------
 
 
-def check_session(session: str, csrf: str) -> Optional[str]:
-    """检查当前 Cookie 是否有效，有效返回 userSlug，无效返回 None。"""
+class SessionCheckResult:
+    """区分"Cookie 过期"和"网络错误"。"""
+    def __init__(self, username: Optional[str] = None,
+                 expired: bool = False, network_error: bool = False):
+        self.username = username
+        self.expired = expired
+        self.network_error = network_error
+
+
+def check_session(session: str, csrf: str) -> SessionCheckResult:
+    """检查当前 Cookie 是否有效。返回 SessionCheckResult 区分三种情况。"""
     if not session:
-        return None
+        return SessionCheckResult(expired=True)
     query = """
     query globalData {
         userStatus {
@@ -86,10 +95,11 @@ def check_session(session: str, csrf: str) -> Optional[str]:
         data = resp.json()
         us = data.get("data", {}).get("userStatus", {})
         if us.get("isSignedIn"):
-            return us.get("userSlug") or us.get("username")
+            slug = us.get("userSlug") or us.get("username")
+            return SessionCheckResult(username=slug)
+        return SessionCheckResult(expired=True)
     except Exception:
-        pass
-    return None
+        return SessionCheckResult(network_error=True)
 
 
 def _ensure_chromium():
@@ -152,7 +162,8 @@ def browser_login() -> dict:
         print("未检测到 LEETCODE_SESSION Cookie，登录可能未成功，请重试。")
         sys.exit(1)
 
-    username = check_session(session_val, csrf_val) or "unknown"
+    result = check_session(session_val, csrf_val)
+    username = result.username or "unknown"
     data = {
         "username": username,
         "LEETCODE_SESSION": session_val,
@@ -170,10 +181,13 @@ def ensure_credentials(interactive: bool = True) -> dict:
     creds = load_credentials()
     if creds["session"]:
         print("正在检查登录状态...")
-        username = check_session(creds["session"], creds["csrf"])
-        if username:
-            print(f"已登录：{username}\n")
-            creds["username"] = username
+        result = check_session(creds["session"], creds["csrf"])
+        if result.username:
+            print(f"已登录：{result.username}\n")
+            creds["username"] = result.username
+            return creds
+        if result.network_error:
+            print("网络连接失败，跳过登录检查，使用缓存凭证继续。\n")
             return creds
         if not interactive:
             print("Cookie 已过期，请手动运行 leetcode --login 重新登录。")
