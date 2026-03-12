@@ -38,6 +38,11 @@ leetcode
 
 首次运行会自动完成三件事：创建 `~/Desktop/刷题计划/` 文件夹 → 打开浏览器登录 LeetCode CN → 拉取今日 AC 记录并写入进度表。
 
+```bash
+# 设置每天 23:00 自动同步（后台运行，关终端不影响）
+leetcode --daemon 23:00
+```
+
 ## Features
 
 ### 一键同步
@@ -47,6 +52,24 @@ leetcode
 ```
 
 自动拉取今日 AC 提交，匹配 Hot100 题目，智能判断当前轮次（R1→R5），在进度表中写入完成日期。同时追加每日打卡记录、刷新进度看板，完成后弹桌面通知。
+
+### 后台守护
+
+```bash
+leetcode --daemon 23:00     # 注册：每天 23:00 自动同步
+leetcode --daemon status    # 查看后台任务状态
+leetcode --daemon stop      # 卸载后台任务
+```
+
+注册一次即永久生效，**关闭终端、注销用户都不影响**。按系统自动适配：
+
+| 系统 | 底层实现 | 管理方式 |
+|:-----|:---------|:---------|
+| macOS | LaunchAgent | `~/Library/LaunchAgents/` |
+| Linux | systemd user timer | `~/.config/systemd/user/` |
+| Windows | 计划任务 (schtasks) | 任务计划程序 |
+
+日志输出到 `~/.leetcode_auto/sync.log`，随时可查。
 
 ### 炫彩终端面板
 
@@ -118,7 +141,10 @@ leetcode --web 3000     # 自定义端口
 | `leetcode --report` | 生成每周报告（Markdown） |
 | `leetcode --badge` | 生成 SVG 进度徽章，可嵌入 GitHub Profile |
 | `leetcode --login` | 重新打开浏览器登录 |
-| `leetcode --cron 23:00` | 每天定时自动同步 |
+| `leetcode --daemon 23:00` | 注册系统后台定时任务（关终端不影响） |
+| `leetcode --daemon status` | 查看后台任务状态 |
+| `leetcode --daemon stop` | 卸载后台定时任务 |
+| `leetcode --cron 23:00` | 前台定时同步（终端需保持运行） |
 
 ## How It Works
 
@@ -217,6 +243,7 @@ leetcode_auto/
     ├── config.py            # 配置加载 & 凭证管理
     ├── init_plan.py         # Hot100 题目列表 + 分类标签 + 模板生成
     ├── sync.py              # 核心同步引擎 + CLI 入口
+    ├── daemon.py            # 后台守护：LaunchAgent / systemd / schtasks
     ├── features.py          # 可视化：Rich TUI / 热力图 / 徽章 / 周报
     └── web.py               # Web 看板：HTTP 服务 + ECharts 前端
 ```

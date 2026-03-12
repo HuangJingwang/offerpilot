@@ -13,7 +13,10 @@
     leetcode --report     生成每周报告
     leetcode --badge      生成 SVG 进度徽章
     leetcode --login      打开浏览器重新登录
-    leetcode --cron 23:00 每天定时自动同步
+    leetcode --daemon 23:00 注册后台定时任务（关终端不影响）
+    leetcode --daemon status 查看后台任务状态
+    leetcode --daemon stop   卸载后台定时任务
+    leetcode --cron 23:00    前台定时同步（终端需保持运行）
 """
 
 import argparse
@@ -796,6 +799,16 @@ def cmd_weakness():
     print_weakness_analysis(rows)
 
 
+def cmd_daemon(arg: str):
+    from .daemon import install_daemon, uninstall_daemon, daemon_status
+    if arg == "status":
+        daemon_status()
+    elif arg == "stop":
+        uninstall_daemon()
+    else:
+        install_daemon(arg)
+
+
 def cmd_report():
     from .features import generate_weekly_report, parse_checkin_data
     ensure_plan_files(PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE)
@@ -819,6 +832,9 @@ def main():
             "  leetcode --weakness   分类薄弱点分析\n"
             "  leetcode --report     生成每周报告\n"
             "  leetcode --badge      生成 SVG 进度徽章\n"
+            "  leetcode --daemon 23:00  注册后台定时任务\n"
+            "  leetcode --daemon status 查看后台任务状态\n"
+            "  leetcode --daemon stop   卸载后台定时任务\n"
         ),
     )
     parser.add_argument("--login", action="store_true",
@@ -835,8 +851,11 @@ def main():
                         help="分类薄弱点分析")
     parser.add_argument("--report", action="store_true",
                         help="生成每周报告")
+    parser.add_argument("--daemon", nargs="?", const="status",
+                        metavar="HH:MM|stop|status",
+                        help="注册系统后台定时任务（关终端不影响）")
     parser.add_argument("--cron", metavar="HH:MM",
-                        help="每天定时自动同步")
+                        help="前台定时同步（终端保持运行）")
     args = parser.parse_args()
 
     if args.login:
@@ -853,6 +872,8 @@ def main():
         cmd_weakness()
     elif args.report:
         cmd_report()
+    elif args.daemon is not None:
+        cmd_daemon(args.daemon)
     elif args.cron:
         cron_loop(args.cron)
     else:
