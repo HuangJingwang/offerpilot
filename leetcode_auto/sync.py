@@ -26,6 +26,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -648,23 +649,48 @@ def update_dashboard(filepath, rows: list[dict], today_count: int,
 
 
 def send_notification(title: str, message: str):
+    """发送桌面通知。message 支持多行，自动拆分为 subtitle + body。"""
     system = platform.system()
+
+    # 多行消息拆分：第一行作 subtitle，其余作 body
+    lines = message.split("\n")
+    subtitle = lines[0] if lines else ""
+    body = " | ".join(lines[1:]) if len(lines) > 1 else ""
+
+    def _esc_applescript(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"')
+
     try:
         if system == "Darwin":
-            subprocess.run([
-                "osascript", "-e",
-                f'display notification "{message}" with title "{title}"',
-            ], capture_output=True, timeout=5)
+            # 优先用 terminal-notifier（点击"显示"不会打开 Script Editor）
+            if shutil.which("terminal-notifier"):
+                cmd = ["terminal-notifier",
+                       "-title", title, "-message", message,
+                       "-group", "leetforge"]
+                subprocess.run(cmd, capture_output=True, timeout=5)
+            else:
+                # osascript: 用 subtitle 在 banner 中展示更多信息
+                t = _esc_applescript(title)
+                s = _esc_applescript(subtitle)
+                b = _esc_applescript(body)
+                script = f'display notification "{b}" with title "{t}" subtitle "{s}"'
+                if not body:
+                    script = f'display notification "{s}" with title "{t}"'
+                subprocess.run(["osascript", "-e", script],
+                               capture_output=True, timeout=5)
         elif system == "Linux":
             subprocess.run(["notify-send", title, message],
                            capture_output=True, timeout=5)
         elif system == "Windows":
+            # 转义单引号，防止 PowerShell 注入
+            safe_title = title.replace("'", "''")
+            safe_msg = message.replace("\n", "`n").replace("'", "''")
             ps = (
-                f"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
-                f"$n = New-Object System.Windows.Forms.NotifyIcon; "
-                f"$n.Icon = [System.Drawing.SystemIcons]::Information; "
-                f"$n.Visible = $true; "
-                f"$n.ShowBalloonTip(5000, '{title}', '{message}', 'Info')"
+                "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
+                "$n = New-Object System.Windows.Forms.NotifyIcon; "
+                "$n.Icon = [System.Drawing.SystemIcons]::Information; "
+                "$n.Visible = $true; "
+                f"$n.ShowBalloonTip(5000, '{safe_title}', '{safe_msg}', 'Info')"
             )
             subprocess.run(["powershell", "-Command", ps],
                            capture_output=True, timeout=5)
@@ -865,16 +891,19 @@ def remind():
         for r in rows if not _is_round_done(r["r1"])
     ][:5]
 
-    # 构建通知内容
-    parts = []
+    # 构建通知内容（每行独立，避免过长截断）
+    lines = []
     if review_due:
-        review_names = [it["title"] for it in review_due[:5]]
-        parts.append(f"待复习 {len(review_due)} 题：{'、'.join(review_names)}")
+        review_names = [it["title"] for it in review_due[:3]]
+        suffix = f" 等{len(review_due)}题" if len(review_due) > 3 else ""
+        lines.append(f"待复习：{'、'.join(review_names)}{suffix}")
     if new_todo:
-        parts.append(f"新题推荐：{'、'.join(new_todo)}")
+        new_names = new_todo[:3]
+        suffix = f" 等{len(new_todo)}题" if len(new_todo) > 3 else ""
+        lines.append(f"新题：{'、'.join(new_names)}{suffix}")
 
-    if parts:
-        msg = "\n".join(parts)
+    if lines:
+        msg = "\n".join(lines)
     else:
         msg = "今日无待复习题目，继续保持！"
 
