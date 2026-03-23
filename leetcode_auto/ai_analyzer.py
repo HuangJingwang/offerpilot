@@ -403,3 +403,39 @@ def chat(user_message: str, history: list,
 
     reply = call_ai_messages(messages, ai_config, system=system_prompt)
     return reply
+
+
+# ---------------------------------------------------------------------------
+# 对话记录持久化
+# ---------------------------------------------------------------------------
+
+from .config import DATA_DIR as _DATA_DIR
+
+_CHAT_HISTORY_FILE = _DATA_DIR / "chat_history.json"
+_MAX_HISTORY = 50  # 最多保留最近 50 轮对话
+
+
+def load_chat_history() -> list:
+    """加载历史对话记录。"""
+    if not _CHAT_HISTORY_FILE.exists():
+        return []
+    try:
+        data = json.loads(_CHAT_HISTORY_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def save_chat_history(history: list):
+    """保存对话记录，只保留最近 N 轮。"""
+    trimmed = history[-_MAX_HISTORY * 2:]  # 每轮 2 条（user + assistant）
+    _CHAT_HISTORY_FILE.write_text(
+        json.dumps(trimmed, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def clear_chat_history():
+    """清空对话记录。"""
+    if _CHAT_HISTORY_FILE.exists():
+        _CHAT_HISTORY_FILE.unlink()

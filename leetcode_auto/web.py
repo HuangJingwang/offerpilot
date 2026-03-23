@@ -426,6 +426,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="输入问题..." autocomplete="off">
       <button id="chat-send">发送</button>
+      <button id="chat-clear" style="background:var(--border);">清空</button>
     </div>
   </div>
 </div>
@@ -786,6 +787,7 @@ function mdToHtml(md){
   var messages=document.getElementById('chat-messages');
   var input=document.getElementById('chat-input');
   var btn=document.getElementById('chat-send');
+  var clearBtn=document.getElementById('chat-clear');
   var history=[];
 
   function appendMsg(role,text){
@@ -803,13 +805,20 @@ function mdToHtml(md){
     messages.scrollTop=messages.scrollHeight;
   }
 
+  // 加载历史对话
+  fetch('/api/chat/history').then(r=>r.json()).then(function(data){
+    if(data.history&&data.history.length>0){
+      history=data.history;
+      history.forEach(function(m){appendMsg(m.role,m.content);});
+    }
+  }).catch(function(){});
+
   function send(){
     var text=input.value.trim();
     if(!text) return;
     input.value='';
     appendMsg('user',text);
     btn.disabled=true;
-    // typing indicator
     var typing=document.createElement('div');
     typing.className='chat-msg assistant';
     typing.innerHTML='<div class="chat-bubble chat-typing">thinking...</div>';
@@ -836,6 +845,18 @@ function mdToHtml(md){
       appendMsg('assistant','网络错误，请重试。');
     });
   }
+
+  clearBtn.addEventListener('click',function(){
+    if(!confirm('清空所有对话记录？')) return;
+    fetch('/api/chat/history',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'clear'})
+    }).then(function(){
+      history=[];
+      messages.innerHTML='<div class="chat-msg assistant"><div class="chat-bubble">对话已清空，有什么想问的？</div></div>';
+    });
+  });
 
   btn.addEventListener('click',send);
   input.addEventListener('keydown',function(e){
@@ -924,7 +945,16 @@ def serve_web(
 
     class Handler(SimpleHTTPRequestHandler):
         def do_GET(self):
-            if self.path == "/api/data":
+            if self.path == "/api/chat/history":
+                from .ai_analyzer import load_chat_history
+                hist = load_chat_history()
+                body = json.dumps({"history": hist}, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == "/api/data":
                 fresh = _reload_data()
                 body = json.dumps(fresh, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -956,14 +986,39 @@ def serve_web(
                 if not ai_config["enabled"]:
                     result = {"error": "AI 未配置，请在 ~/.leetcode_auto/.env 中设置 AI_PROVIDER 和 AI_API_KEY"}
                 else:
-                    from .ai_analyzer import build_chat_context, chat as ai_chat
+                    from .ai_analyzer import (
+                        build_chat_context, chat as ai_chat,
+                        save_chat_history,
+                    )
                     system_prompt = build_chat_context()
                     reply = ai_chat(msg, history, system_prompt)
                     if reply:
+                        history.append({"role": "user", "content": msg})
+                        history.append({"role": "assistant", "content": reply})
+                        save_chat_history(history)
                         result = {"reply": reply}
                     else:
                         result = {"error": "AI 请求失败，请重试"}
 
+                body = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == "/api/chat/history":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                try:
+                    req = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    req = {}
+                if req.get("action") == "clear":
+                    from .ai_analyzer import clear_chat_history
+                    clear_chat_history()
+                    result = {"ok": True}
+                else:
+                    result = {"error": "unknown action"}
                 body = json.dumps(result, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

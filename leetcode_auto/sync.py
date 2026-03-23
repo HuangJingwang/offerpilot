@@ -1111,7 +1111,10 @@ def cmd_remind_daemon(arg: str):
 def cmd_chat():
     """交互式 AI 对话，询问刷题进度和建议。"""
     from .config import get_ai_config
-    from .ai_analyzer import build_chat_context, chat
+    from .ai_analyzer import (
+        build_chat_context, chat, load_chat_history,
+        save_chat_history, clear_chat_history,
+    )
 
     ai_config = get_ai_config()
     if not ai_config["enabled"]:
@@ -1121,10 +1124,13 @@ def cmd_chat():
         sys.exit(1)
 
     print(f"=== LeetForge AI 助手（{ai_config['model']}）===")
-    print("输入问题即可对话，输入 q 退出\n")
+    print("输入问题即可对话，输入 q 退出，输入 clear 清空历史\n")
 
     system_prompt = build_chat_context()
-    history = []
+    history = load_chat_history()
+
+    if history:
+        print(f"（已加载 {len(history) // 2} 轮历史对话）\n")
 
     while True:
         try:
@@ -1137,11 +1143,17 @@ def cmd_chat():
         if user_input.lower() in ("q", "quit", "exit"):
             print("再见！")
             break
+        if user_input.lower() == "clear":
+            history = []
+            clear_chat_history()
+            print("已清空对话历史。\n")
+            continue
 
         reply = chat(user_input, history, system_prompt)
         if reply:
             history.append({"role": "user", "content": user_input})
             history.append({"role": "assistant", "content": reply})
+            save_chat_history(history)
             print(f"\n助手: {reply}\n")
         else:
             print("\n助手: 抱歉，请求失败，请重试。\n")
