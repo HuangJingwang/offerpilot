@@ -133,6 +133,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LeetCode Hot100 刷题看板</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 :root {
   --bg: #0d1117; --bg2: #161b22; --card: #1c2129; --border: #30363d;
@@ -278,10 +279,20 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 .chat-bubble { max-width:75%; padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
 .chat-msg.user .chat-bubble { background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
 .chat-msg.assistant .chat-bubble { background:var(--card); border:1px solid var(--border); border-bottom-left-radius:4px; }
-.chat-msg.assistant .chat-bubble h3 { font-size:14px; color:var(--accent); margin:8px 0 4px; }
-.chat-msg.assistant .chat-bubble code { background:var(--bg); padding:1px 5px; border-radius:3px; font-size:12px; }
-.chat-msg.assistant .chat-bubble pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; margin:6px 0; font-size:12px; overflow-x:auto; }
-.chat-msg.assistant .chat-bubble ul,.chat-msg.assistant .chat-bubble ol { margin-left:16px; }
+.chat-msg.assistant .chat-bubble h1,.chat-msg.assistant .chat-bubble h2,.chat-msg.assistant .chat-bubble h3 { font-size:14px; color:var(--accent); margin:10px 0 4px; }
+.chat-msg.assistant .chat-bubble h1:first-child,.chat-msg.assistant .chat-bubble h2:first-child,.chat-msg.assistant .chat-bubble h3:first-child { margin-top:0; }
+.chat-msg.assistant .chat-bubble p { margin:6px 0; }
+.chat-msg.assistant .chat-bubble code { background:var(--bg); padding:1px 5px; border-radius:3px; font-size:12px; font-family:'SF Mono',Monaco,monospace; }
+.chat-msg.assistant .chat-bubble pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; margin:8px 0; font-size:12px; overflow-x:auto; line-height:1.5; }
+.chat-msg.assistant .chat-bubble pre code { background:none; padding:0; }
+.chat-msg.assistant .chat-bubble ul,.chat-msg.assistant .chat-bubble ol { margin:6px 0 6px 20px; }
+.chat-msg.assistant .chat-bubble li { margin:3px 0; }
+.chat-msg.assistant .chat-bubble table { border-collapse:collapse; margin:8px 0; font-size:13px; }
+.chat-msg.assistant .chat-bubble th,.chat-msg.assistant .chat-bubble td { border:1px solid var(--border); padding:4px 10px; }
+.chat-msg.assistant .chat-bubble th { background:var(--bg); }
+.chat-msg.assistant .chat-bubble strong { color:var(--text); }
+.chat-msg.assistant .chat-bubble hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
+.chat-msg.assistant .chat-bubble blockquote { border-left:3px solid var(--accent); padding-left:10px; color:var(--dim); margin:8px 0; }
 .chat-input-row { display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border); }
 .chat-input-row input { flex:1; background:var(--bg2); border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:8px; font-size:14px; outline:none; }
 .chat-input-row input:focus { border-color:var(--accent); }
@@ -723,24 +734,12 @@ renderTable();
 // ====== Optimization ======
 function mdToHtml(md){
   if(!md) return '';
-  var s=md;
-  // code blocks
-  s=s.replace(/```(\w*)\n([\s\S]*?)```/g,function(_,lang,code){
-    return '<pre><code>'+code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</code></pre>';
-  });
-  // inline code
-  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
-  // headers
-  s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
-  s=s.replace(/^## (.+)$/gm,'<h3>$1</h3>');
-  // bold
-  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-  // list items
-  s=s.replace(/^- (.+)$/gm,'<li>$1</li>');
-  s=s.replace(/^(\d+)\. (.+)$/gm,'<li>$2</li>');
-  // paragraphs
-  s=s.replace(/\n{2,}/g,'</p><p>');
-  return '<p>'+s+'</p>';
+  if(typeof marked!=='undefined'){
+    marked.setOptions({breaks:true,gfm:true});
+    return marked.parse(md);
+  }
+  // fallback: basic escaping
+  return '<p>'+md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')+'</p>';
 }
 (function(){
   var container=document.getElementById('optimize-list');
