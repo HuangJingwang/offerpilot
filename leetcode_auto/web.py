@@ -144,13 +144,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; display:flex; min-height:100vh; }
 
 /* Sidebar */
-.sidebar { width:220px; background:var(--bg2); border-right:1px solid var(--border); padding:20px 0; position:fixed; height:100vh; overflow-y:auto; }
-.sidebar h1 { font-size:16px; padding:0 20px 20px; border-bottom:1px solid var(--border); }
+.sidebar { width:220px; background:var(--bg2); border-right:1px solid var(--border); padding:20px 0; position:fixed; height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
+.sidebar h1 { font-size:18px; padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:8px; }
 .sidebar h1 span { color:var(--accent); }
-.nav-item { display:flex; align-items:center; gap:10px; padding:12px 20px; cursor:pointer; color:var(--dim); transition:all .2s; font-size:14px; border-left:3px solid transparent; }
+.nav-icon { font-size:16px; width:22px; text-align:center; flex-shrink:0; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:11px 20px; cursor:pointer; color:var(--dim); transition:all .2s; font-size:14px; border-left:3px solid transparent; }
 .nav-item:hover { background:var(--card); color:var(--text); }
 .nav-item.active { color:var(--accent); border-left-color:var(--accent); background:rgba(88,166,255,0.08); }
 .nav-item .badge { background:var(--red); color:#fff; font-size:11px; padding:1px 6px; border-radius:10px; margin-left:auto; }
+.nav-sep { height:1px; background:var(--border); margin:8px 20px; }
+.sidebar-footer { margin-top:auto; padding:12px 20px; border-top:1px solid var(--border); }
+.sidebar-info { font-size:11px; color:var(--border); }
 
 /* Main */
 .main { margin-left:220px; flex:1; padding:24px; max-width:1400px; }
@@ -163,6 +167,8 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 .stat-card .num { font-size:28px; font-weight:bold; color:var(--accent); }
 .stat-card .label { font-size:12px; color:var(--dim); margin-top:4px; }
 .stat-card .num.fire { color:var(--orange); }
+.stat-card .num-sub { font-size:14px; font-weight:400; color:var(--dim); }
+.stat-card .num.num-sm { font-size:15px; font-weight:500; margin-top:6px; }
 
 /* Grid */
 .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); gap:16px; margin-bottom:16px; }
@@ -305,10 +311,17 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 
 /* Responsive */
 @media (max-width:768px) {
-  .sidebar { display:none; }
-  .main { margin-left:0; }
+  .sidebar { position:fixed; bottom:0; top:auto; left:0; right:0; width:100%; height:auto; flex-direction:row; border-right:none; border-top:1px solid var(--border); padding:0; z-index:100; overflow-x:auto; }
+  .sidebar h1,.nav-sep,.sidebar-footer { display:none; }
+  .nav-item { flex-direction:column; padding:8px 12px; font-size:11px; gap:2px; border-left:none; border-top:3px solid transparent; flex-shrink:0; }
+  .nav-item.active { border-left:none; border-top-color:var(--accent); }
+  .nav-icon { font-size:18px; }
+  .nav-item .badge { position:absolute; top:2px; right:2px; font-size:9px; padding:0 4px; }
+  .main { margin-left:0; padding:16px 12px 70px; }
   .grid { grid-template-columns:1fr; }
   .stats-row { grid-template-columns:repeat(2,1fr); }
+  .today-grid { grid-template-columns:1fr; }
+  .chat-container { height:calc(100vh - 160px); }
 }
 
 /* Page title */
@@ -319,24 +332,28 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 <body>
 
 <nav class="sidebar">
-  <h1><span>LeetCode</span> Hot100</h1>
+  <h1><span>LeetForge</span></h1>
   <div class="nav-item active" data-tab="dashboard">
-    <span>Dashboard</span>
-  </div>
-  <div class="nav-item" data-tab="progress">
-    <span>Progress</span>
-  </div>
-  <div class="nav-item" data-tab="checkin">
-    <span>Checkin</span>
-  </div>
-  <div class="nav-item" data-tab="review" id="nav-review">
-    <span>Review</span>
-  </div>
-  <div class="nav-item" data-tab="optimize" id="nav-optimize">
-    <span>Optimize</span>
+    <span class="nav-icon">&#128200;</span><span>Dashboard</span>
   </div>
   <div class="nav-item" data-tab="chat">
-    <span>AI Chat</span>
+    <span class="nav-icon">&#128172;</span><span>AI Chat</span>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-item" data-tab="progress">
+    <span class="nav-icon">&#128221;</span><span>Progress</span>
+  </div>
+  <div class="nav-item" data-tab="review" id="nav-review">
+    <span class="nav-icon">&#128214;</span><span>Review</span>
+  </div>
+  <div class="nav-item" data-tab="checkin">
+    <span class="nav-icon">&#128197;</span><span>Check-in</span>
+  </div>
+  <div class="nav-item" data-tab="optimize" id="nav-optimize">
+    <span class="nav-icon">&#9889;</span><span>Optimize</span>
+  </div>
+  <div class="sidebar-footer">
+    <div class="sidebar-info">Data: __TODAY__</div>
   </div>
 </nav>
 
@@ -346,35 +363,35 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 <div class="tab-content active" id="tab-dashboard">
   <div class="page-title"><span class="icon">&#127919;</span> Dashboard</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="num">__DONE_ROUNDS__</div><div class="label">done / __TOTAL_ROUNDS__ rounds</div></div>
-    <div class="stat-card"><div class="num">__RATE__%</div><div class="label">rate</div></div>
-    <div class="stat-card"><div class="num">__DONE_ALL__</div><div class="label">pass / __TOTAL__ problems</div></div>
-    <div class="stat-card"><div class="num __STREAK_CLASS__">__STREAK__</div><div class="label">streak (days)</div></div>
-    <div class="stat-card"><div class="num">__TOTAL_DAYS__</div><div class="label">total days</div></div>
-    <div class="stat-card"><div class="label" style="font-size:13px;margin-top:8px;">__EST__</div><div class="label">estimated</div></div>
+    <div class="stat-card"><div class="num">__DONE_ROUNDS__<span class="num-sub">/ __TOTAL_ROUNDS__</span></div><div class="label">completed round</div></div>
+    <div class="stat-card"><div class="num">__RATE__%</div><div class="label">completion rate</div></div>
+    <div class="stat-card"><div class="num">__DONE_ALL__<span class="num-sub">/ __TOTAL__</span></div><div class="label">5 rounds pass</div></div>
+    <div class="stat-card"><div class="num __STREAK_CLASS__">__STREAK__</div><div class="label">streak days</div></div>
+    <div class="stat-card"><div class="num">__TOTAL_DAYS__</div><div class="label">total check-in days</div></div>
+    <div class="stat-card"><div class="num num-sm">__EST__</div><div class="label">estimated completion</div></div>
   </div>
   <div class="today-grid">
     <div class="today-card">
-      <h2>Today: New <span class="count count-accent" id="new-count"></span></h2>
+      <h2>Today: New Problems <span class="count count-accent" id="new-count"></span></h2>
       <ul class="today-list" id="today-new"></ul>
     </div>
     <div class="today-card">
-      <h2>Today: Review <span class="count count-red" id="review-count-dash"></span></h2>
+      <h2>Today: Review Problems <span class="count count-red" id="review-count-dash"></span></h2>
       <ul class="today-list" id="today-review"></ul>
     </div>
   </div>
   <div class="grid">
-    <div class="card"><h2>Rate</h2><div id="gauge" class="chart"></div></div>
+    <div class="card"><h2>Completion Rate</h2><div id="gauge" class="chart"></div></div>
     <div class="card"><h2>Round Progress</h2><div id="rounds" class="chart"></div></div>
-    <div class="card"><h2>Category</h2><div id="radar" class="chart"></div></div>
+    <div class="card"><h2>Category Radar</h2><div id="radar" class="chart"></div></div>
     <div class="card"><h2>Daily Trend</h2><div id="trend" class="chart"></div></div>
-    <div class="card card-full"><h2>Heatmap</h2><div id="heatmap" class="chart-lg"></div></div>
+    <div class="card card-full"><h2>Heatmap (365 days)</h2><div id="heatmap" class="chart-lg"></div></div>
   </div>
 </div>
 
 <!-- ==================== Progress ==================== -->
 <div class="tab-content" id="tab-progress">
-  <div class="page-title"><span class="icon">&#128202;</span> Progress <span class="table-count" id="table-count"></span></div>
+  <div class="page-title"><span class="icon">&#128221;</span> Progress <span class="table-count" id="table-count"></span></div>
   <div class="table-controls">
     <input type="text" id="search-input" placeholder="Search...">
     <select id="filter-difficulty">
@@ -409,7 +426,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 
 <!-- ==================== Checkin ==================== -->
 <div class="tab-content" id="tab-checkin">
-  <div class="page-title"><span class="icon">&#128197;</span> Check-in History</div>
+  <div class="page-title"><span class="icon">&#128197;</span> Check-in Record</div>
   <div class="grid">
     <div class="card card-full"><h2>Daily Trend</h2><div id="checkin-trend" class="chart"></div></div>
   </div>
@@ -418,7 +435,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 
 <!-- ==================== Review ==================== -->
 <div class="tab-content" id="tab-review">
-  <div class="page-title"><span class="icon">&#128214;</span> Review Due <span class="table-count" id="review-count"></span></div>
+  <div class="page-title"><span class="icon">&#128214;</span> Review <span class="table-count" id="review-count"></span></div>
   <div class="card" id="review-card">
     <ul class="review-list" id="review-list"></ul>
   </div>
@@ -550,7 +567,7 @@ if(D.daily.length>0){
     ]
   });
 } else {
-  document.getElementById('trend').innerHTML='<div class="empty-state"><p>No Data</p></div>';
+  document.getElementById('trend').innerHTML='<div class="empty-state"><p>no data yet</p></div>';
 }
 
 // Heatmap
@@ -590,7 +607,7 @@ window.addEventListener('resize',function(){
   var showNew=todos.slice(0,10);
   newCount.textContent=todos.length;
   if(showNew.length===0){
-    newList.innerHTML='<li style="color:var(--dim)">R1 done!</li>';
+    newList.innerHTML='<li style="color:var(--dim)">R1 all completed!</li>';
   } else {
     var h='';
     showNew.forEach(function(t){
@@ -608,7 +625,7 @@ window.addEventListener('resize',function(){
   var reviews=D.review_due||[];
   revCount.textContent=reviews.length;
   if(reviews.length===0){
-    revList.innerHTML='<li style="color:var(--green)">No reviews due today!</li>';
+    revList.innerHTML='<li style="color:var(--green)">no reviews due. keep it up!</li>';
   } else {
     var h='';
     reviews.forEach(function(r){
@@ -692,8 +709,8 @@ renderTable();
 (function(){
   var container=document.getElementById('checkin-timeline');
   if(D.checkins.length===0){
-    container.innerHTML='<div class="empty-state"><div class="icon">&#128197;</div><p>No Data</p></div>';
-    document.getElementById('checkin-trend').innerHTML='<div class="empty-state"><p>No Data</p></div>';
+    container.innerHTML='<div class="empty-state"><div class="icon">&#128197;</div><p>no data yet</p></div>';
+    document.getElementById('checkin-trend').innerHTML='<div class="empty-state"><p>no data yet</p></div>';
     return;
   }
   var html='';
@@ -730,7 +747,7 @@ renderTable();
   var list=document.getElementById('review-list');
   var count=document.getElementById('review-count');
   if(!D.review_due||D.review_due.length===0){
-    document.getElementById('review-card').innerHTML='<div class="empty-state"><div class="icon">&#9989;</div><p>No reviews due. Keep it up!</p></div>';
+    document.getElementById('review-card').innerHTML='<div class="empty-state"><div class="icon">&#9989;</div><p>no reviews due, keep it up!</p></div>';
     count.textContent='(0)';
     return;
   }
@@ -757,7 +774,7 @@ function mdToHtml(md){
   var container=document.getElementById('optimize-list');
   var count=document.getElementById('opt-count');
   if(!D.optimizations||D.optimizations.length===0){
-    container.innerHTML='<div class="empty-state"><div class="icon">&#9889;</div><p>All submissions are well optimized!</p></div>';
+    container.innerHTML='<div class="empty-state"><div class="icon">&#9889;</div><p>all submissions are well optimized!</p></div>';
     count.textContent='(0)';
     return;
   }
