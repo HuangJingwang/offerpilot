@@ -4,7 +4,7 @@
 
 **刷题如锻造，每遍皆淬炼。**
 
-你的 LeetCode Hot100 刷题锻造台 —— 自动同步、智能复习、炫彩看板，一站搞定。
+你的 LeetCode Hot100 刷题锻造台 —— 自动同步、智能复习、代码优化检测、交互式 Web 看板，一站搞定。
 
 [![Python](https://img.shields.io/badge/Python-3.9+-3776ab?logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -16,13 +16,14 @@
 
 ## Why LeetForge?
 
-刷 Hot100 最痛的不是做题，而是 **记不住做了什么、不知道该复习什么、看不到进度**。
+刷 Hot100 最痛的不是做题，而是 **记不住做了什么、不知道该复习什么、看不到进度、不知道代码能不能更优**。
 
-LeetForge 帮你解决这三个问题：
+LeetForge 帮你解决这些问题：
 
 - **自动同步** — 每天自动拉取 LeetCode CN AC 记录，零手动输入
 - **间隔复习** — 基于艾宾浩斯遗忘曲线，精准推送今日待复习题目
-- **可视追踪** — 终端炫彩面板、Web 看板、热力图，进度一目了然
+- **代码优化** — 自动检测提交代码的性能表现，标记有优化空间的题目
+- **Web 看板** — 交互式 Web 界面查看全部数据，取代桌面 Markdown 文件
 
 ## Quick Start
 
@@ -34,9 +35,14 @@ pip install -e .
 
 # 首次运行（自动弹浏览器登录 + 同步）
 leetcode
+
+# 打开 Web 看板查看所有数据
+leetcode --web
 ```
 
-首次运行会自动完成三件事：创建 `~/Desktop/刷题计划/` 文件夹 → 打开浏览器登录 LeetCode CN → 拉取今日 AC 记录并写入进度表。
+首次运行会自动完成三件事：初始化数据目录 → 打开浏览器登录 LeetCode CN → 拉取今日 AC 记录并写入进度表。
+
+数据统一存储在 `~/.leetcode_auto/data/` 下，通过 `leetcode --web` 在浏览器中查看所有信息。
 
 ```bash
 # 设置后台自动同步（关终端不影响）
@@ -46,13 +52,35 @@ leetcode --daemon 23:00     # 或每天固定时间
 
 ## Features
 
-### 一键同步
+### 一键同步 + 代码优化检测
 
 ```bash
 leetcode
 ```
 
-自动拉取今日 AC 提交，匹配 Hot100 题目，智能判断当前轮次（R1→R5），在进度表中写入完成日期。同时追加每日打卡记录、刷新进度看板。**仅在有新 AC 同步时弹桌面通知**，无 AC 时静默跳过。
+自动拉取今日 AC 提交，匹配 Hot100 题目，智能判断当前轮次（R1→R5），写入完成日期。同时：
+- 追加每日打卡记录、刷新进度看板
+- **自动分析每道提交的 runtime/memory 百分位**，低于 50% 的题目标记为待优化
+- 仅在有新 AC 同步时弹桌面通知，无 AC 时静默跳过
+
+### Web 看板
+
+```bash
+leetcode --web          # 默认端口 8100
+leetcode --web 3000     # 自定义端口
+```
+
+自动打开浏览器，GitHub 暗色风格交互式看板，包含 **5 个标签页**：
+
+| 标签页 | 内容 |
+|--------|------|
+| **Dashboard** | 统计卡片、完成率仪表盘、各轮进度柱状图、分类能力雷达图、每日趋势图、年度热力图 |
+| **Progress** | 100 题完整进度表，支持按题名搜索、按难度/分类/状态筛选，点击跳转 LeetCode |
+| **Checkin** | 每日打卡时间线 + 近 30 天趋势折线图 |
+| **Review** | 今日待复习题目列表，按逾期天数排序，导航栏显示待复习数量 |
+| **Optimize** | 代码优化建议，展示 runtime/memory 百分位进度条，可展开查看原始代码 |
+
+> 所有数据存储在 `~/.leetcode_auto/data/`，不再在桌面创建 Markdown 文件。已有桌面数据会在首次运行时自动迁移。
 
 ### 每日提醒
 
@@ -130,27 +158,15 @@ leetcode --heatmap
 
 GitHub Contribution 风格，在终端中渲染每日刷题密度。
 
-### Web 看板
-
-```bash
-leetcode --web          # 默认端口 8100
-leetcode --web 3000     # 自定义端口
-```
-
-自动打开浏览器，GitHub 暗色风格交互式看板，包含：
-
-| 图表 | 说明 |
-|------|------|
-| 仪表盘 | 环形完成率百分比 |
-| 柱状图 | R1~R5 各轮完成数对比 |
-| 雷达图 | 15 个算法分类掌握度 |
-| 趋势图 | 近 60 天新题/复习堆叠柱状图 |
-| 热力图 | ECharts 年度日历热力图 |
-
-### 更多命令
+### 全部命令
 
 | 命令 | 说明 |
 |:-----|:-----|
+| `leetcode` | 同步今日刷题记录 + 代码优化检测 |
+| `leetcode --web` | 打开 Web 看板（进度/打卡/复习/优化） |
+| `leetcode --status` | 炫彩终端进度面板 |
+| `leetcode --heatmap` | GitHub 风格刷题热力图 |
+| `leetcode --optimize` | 查看待优化题目列表 |
 | `leetcode --weakness` | 分类薄弱点分析 + 能力雷达图 |
 | `leetcode --report` | 生成每周报告（Markdown） |
 | `leetcode --badge` | 生成 SVG 进度徽章，可嵌入 GitHub Profile |
@@ -172,22 +188,24 @@ leetcode --web 3000     # 自定义端口
 ┌───────────┐   submissionList   ┌──────────────┐
 │ LeetCode  │ ◄───────────────── │  LeetForge   │
 │    CN     │  GraphQL API       │              │
-└───────────┘  (filter AC,       │  ┌─ sync ──┐ │     ┌─────────────────────┐
-                extract slug     │  │ match   │ │────►│ ~/Desktop/刷题计划/  │
-                from url field)  │  │ Hot100  │ │     │  01_进度表.md        │
-                                 │  │ update  │ │     │  02_每日打卡.md      │
-                                 │  │ rounds  │ │     │  03_进度看板.md      │
-                                 │  └─────────┘ │     └─────────────────────┘
+└───────────┘  (filter AC,       │  ┌─ sync ──┐ │     ┌──────────────────────┐
+                extract slug     │  │ match   │ │────►│ ~/.leetcode_auto/    │
+                from url field)  │  │ Hot100  │ │     │  data/进度表.md       │
+                                 │  │ update  │ │     │  data/打卡.md         │
+               submissionDetail  │  │ rounds  │ │     │  data/optimizations   │
+              ◄───────────────── │  │ analyze │ │     └──────────────────────┘
+                (code, runtime%, │  │ optimize│ │
+                 memory%)        │  └─────────┘ │
                                  │              │
-                                 │  ┌─ views ─┐ │     ┌─────────────────────┐
-                                 │  │ Rich TUI│ │────►│ Terminal / Browser  │
-                                 │  │ Web UI  │ │     └─────────────────────┘
-                                 │  │ Heatmap │ │
+                                 │  ┌─ views ─┐ │     ┌──────────────────────┐
+                                 │  │ Web SPA │ │────►│ Browser (--web)      │
+                                 │  │ Rich TUI│ │     │ Terminal (--status)  │
+                                 │  │ Heatmap │ │     └──────────────────────┘
                                  │  └─────────┘ │
                                  └──────────────┘
 ```
 
-> **API 说明**：LeetCode CN 已下线 `recentACSubmissions` 和 `recentSubmissions` 字段，LeetForge 现统一使用 `submissionList` 接口，通过返回的 `url` 字段（`/problems/{titleSlug}/submissions/...`）解析题目标识。
+> **API 说明**：LeetCode CN 已下线 `recentACSubmissions` 和 `recentSubmissions` 字段，LeetForge 现统一使用 `submissionList` 接口，通过返回的 `url` 字段（`/problems/{titleSlug}/submissions/...`）解析题目标识。同步时额外调用 `submissionDetail` 获取代码和性能百分位数据。
 
 **间隔复习算法：**
 
@@ -200,6 +218,10 @@ leetcode --web 3000     # 自定义端口
 | R5 | +14 天 | 长期记忆 |
 
 LeetForge 自动追踪每道题的 R1~R5 完成日期，精准计算哪些题今日到期需要复习。
+
+**代码优化检测：**
+
+每次同步时，LeetForge 通过 `submissionDetail` API 获取每道 AC 提交的 runtime 和 memory 百分位。若击败用户比例低于 50%，则标记为有优化空间，记录到优化建议中，在 Web 看板的 Optimize 标签页可查看代码和改进方向。
 
 ## Installation
 
@@ -227,21 +249,25 @@ pip install -e .
 
 ## Configuration
 
-所有配置存放在 `~/.leetcode_auto/` 目录下：
+所有配置和数据存放在 `~/.leetcode_auto/` 目录下：
 
-| 文件 | 说明 |
-|:-----|:-----|
+| 文件/目录 | 说明 |
+|:----------|:-----|
 | `cookies.json` | 浏览器登录后自动保存的凭证 |
 | `.env` | 可选的手动配置文件 |
+| `data/` | 进度表、打卡记录、优化建议等数据文件 |
+| `sync.log` | 后台同步日志 |
 
-### 自定义计划路径
+### 自定义数据路径
 
-默认输出到 `~/Desktop/刷题计划/`，可通过环境变量修改：
+默认数据存储在 `~/.leetcode_auto/data/`，可通过环境变量修改：
 
 ```bash
 # ~/.leetcode_auto/.env
 PLAN_DIR=/your/custom/path
 ```
+
+> **从旧版迁移**：如果你之前使用的是桌面版（`~/Desktop/刷题计划/`），首次运行新版时会自动将数据迁移到 `~/.leetcode_auto/data/`，桌面旧文件可手动删除。
 
 ### 手动配置 Cookie（不使用浏览器登录）
 
@@ -259,15 +285,14 @@ leetcode_auto/
 ├── install.sh              # 一键安装脚本
 ├── pyproject.toml          # 包元信息 + 依赖 + CLI 入口
 ├── setup.py                # pip 向后兼容
-├── .env.example            # 配置模板
 └── leetcode_auto/
     ├── __init__.py
-    ├── config.py            # 配置加载 & 凭证管理
+    ├── config.py            # 配置加载 & 凭证管理 & 数据迁移
     ├── init_plan.py         # Hot100 题目列表 + 分类标签 + 模板生成
-    ├── sync.py              # 核心同步引擎 + CLI 入口
+    ├── sync.py              # 核心同步引擎 + 代码优化检测 + CLI 入口
     ├── daemon.py            # 后台守护：LaunchAgent / systemd / schtasks
     ├── features.py          # 可视化：Rich TUI / 热力图 / 徽章 / 周报
-    └── web.py               # Web 看板：HTTP 服务 + ECharts 前端
+    └── web.py               # Web 看板：多标签页 SPA + ECharts 可视化
 ```
 
 ## FAQ
@@ -282,7 +307,13 @@ leetcode_auto/
 <details>
 <summary><b>智能复习是怎么算的？</b></summary>
 
-基于间隔重复：R1 做完后 1 天到期 R2，3 天后到期 R3，7 天后到期 R4，14 天后到期 R5。`--status` 面板按逾期天数排序展示。
+基于间隔重复：R1 做完后 1 天到期 R2，3 天后到期 R3，7 天后到期 R4，14 天后到期 R5。`--status` 面板和 Web 看板的 Review 标签页按逾期天数排序展示。
+</details>
+
+<details>
+<summary><b>代码优化检测是怎么工作的？</b></summary>
+
+每次同步时，LeetForge 通过 LeetCode 的 `submissionDetail` API 获取每道提交的 `runtimePercentile` 和 `memoryPercentile`。如果击败用户比例低于 50%，则标记为有优化空间。可通过 `leetcode --optimize` 或 `leetcode --web` 的 Optimize 标签页查看详情和原始代码。
 </details>
 
 <details>
@@ -295,6 +326,12 @@ leetcode_auto/
 <summary><b>Web 看板需要联网吗？</b></summary>
 
 需要加载 ECharts CDN 资源，数据本身全在本地。
+</details>
+
+<details>
+<summary><b>桌面上的旧 Markdown 文件怎么办？</b></summary>
+
+新版数据统一存储在 `~/.leetcode_auto/data/`，首次运行会自动迁移桌面旧数据。迁移后桌面文件可手动删除。
 </details>
 
 <details>

@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -12,10 +13,31 @@ load_dotenv(DATA_DIR / ".env")
 LEETCODE_API_URL = "https://leetcode.cn/graphql/"
 COOKIES_FILE = DATA_DIR / "cookies.json"
 
-PLAN_DIR = Path(os.getenv("PLAN_DIR", os.path.expanduser("~/Desktop/刷题计划")))
+# 数据文件统一存放在 DATA_DIR/data 下，不再在桌面创建文件
+_OLD_PLAN_DIR = Path(os.path.expanduser("~/Desktop/刷题计划"))
+PLAN_DIR = Path(os.getenv("PLAN_DIR", str(DATA_DIR / "data")))
 PROGRESS_FILE = PLAN_DIR / "01_Hot100_进度表.md"
 CHECKIN_FILE = PLAN_DIR / "02_每日打卡.md"
 DASHBOARD_FILE = PLAN_DIR / "03_进度看板.md"
+OPTIMIZE_FILE = PLAN_DIR / "04_优化建议.md"
+
+
+def migrate_from_desktop():
+    """如果旧桌面目录有数据而新目录没有，自动迁移。"""
+    if not _OLD_PLAN_DIR.exists():
+        return
+    if PLAN_DIR.exists() and any(PLAN_DIR.iterdir()):
+        return
+    PLAN_DIR.mkdir(parents=True, exist_ok=True)
+    migrated = []
+    for f in _OLD_PLAN_DIR.iterdir():
+        if f.is_file():
+            shutil.copy2(f, PLAN_DIR / f.name)
+            migrated.append(f.name)
+    if migrated:
+        print(f"已从桌面迁移刷题数据：{', '.join(migrated)}")
+        print(f"新数据目录：{PLAN_DIR}")
+        print(f"桌面旧文件可手动删除：{_OLD_PLAN_DIR}\n")
 
 
 def load_credentials() -> dict:

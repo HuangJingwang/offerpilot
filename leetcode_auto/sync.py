@@ -2,14 +2,15 @@
 """LeetCode Hot100 每日同步工具
 
 自动获取今日 LeetCode CN 的 AC 记录，筛选 Hot100 题目，
-更新桌面刷题计划中的进度表、每日打卡和进度看板。
+更新刷题进度并检测代码优化空间。
 
 用法:
     leetcode              同步今日刷题记录
+    leetcode --web        打开 Web 看板（进度/打卡/复习/优化）
     leetcode --status     炫彩进度面板 + 智能复习提醒
     leetcode --heatmap    GitHub 风格刷题热力图
-    leetcode --web        交互式 Web 看板
     leetcode --weakness   分类薄弱点分析
+    leetcode --optimize   查看待优化题目列表
     leetcode --report     生成每周报告
     leetcode --badge      生成 SVG 进度徽章
     leetcode --login      打开浏览器重新登录
@@ -43,6 +44,7 @@ from .config import (
     PROGRESS_FILE,
     CHECKIN_FILE,
     DASHBOARD_FILE,
+    OPTIMIZE_FILE,
     load_credentials,
 )
 from .init_plan import ensure_plan_files
@@ -290,6 +292,140 @@ def fetch_recent_all(username: str, session: str, csrf: str) -> list[dict]:
         return _fetch_submission_list(session, csrf, limit=80)
     except Exception:
         return []
+
+
+SUBMISSION_DETAIL_QUERY = """
+query submissionDetail($submissionId: ID!) {
+    submissionDetail(submissionId: $submissionId) {
+        id
+        code
+        runtime
+        memory
+        runtimePercentile
+        memoryPercentile
+        lang {
+            name
+        }
+        question {
+            titleSlug
+            title
+            translatedTitle
+        }
+    }
+}
+"""
+
+
+def fetch_submission_detail(session: str, csrf: str, submission_id: str) -> dict:
+    """获取单个提交的详细信息（代码、运行时间/内存百分位等）。"""
+    headers = _make_headers(session, csrf)
+    payload = {
+        "query": SUBMISSION_DETAIL_QUERY,
+        "variables": {"submissionId": submission_id},
+    }
+    resp = requests.post(LEETCODE_API_URL, json=payload, headers=headers, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("data", {}).get("submissionDetail", {}) or {}
+
+
+def check_optimization_potential(detail: dict, threshold: float = 50.0) -> Optional[dict]:
+    """检查提交是否有优化空间。
+
+    threshold: 百分位阈值，低于此值认为有优化空间（默认 50%）。
+    返回优化建议字典，无优化空间返回 None。
+    """
+    if not detail:
+        return None
+
+    runtime_pct = detail.get("runtimePercentile")
+    memory_pct = detail.get("memoryPercentile")
+
+    if runtime_pct is None and memory_pct is None:
+        return None
+
+    suggestions = []
+    runtime_pct = float(runtime_pct) if runtime_pct is not None else None
+    memory_pct = float(memory_pct) if memory_pct is not None else None
+
+    if runtime_pct is not None and runtime_pct < threshold:
+        suggestions.append(f"运行时间击败 {runtime_pct:.1f}% 用户，建议优化时间复杂度")
+    if memory_pct is not None and memory_pct < threshold:
+        suggestions.append(f"内存使用击败 {memory_pct:.1f}% 用户，建议优化空间复杂度")
+
+    if not suggestions:
+        return None
+
+    question = detail.get("question", {})
+    return {
+        "title_slug": question.get("titleSlug", ""),
+        "title": question.get("translatedTitle") or question.get("title", ""),
+        "lang": detail.get("lang", {}).get("name", ""),
+        "runtime": detail.get("runtime", ""),
+        "memory": detail.get("memory", ""),
+        "runtime_pct": runtime_pct,
+        "memory_pct": memory_pct,
+        "code": detail.get("code", ""),
+        "suggestions": suggestions,
+    }
+
+
+def analyze_submissions_for_optimization(
+    session: str, csrf: str, today_subs: list[dict], threshold: float = 50.0,
+) -> list[dict]:
+    """批量分析今日 AC 提交的优化空间。"""
+    results = []
+    for sub in today_subs:
+        sub_id = sub.get("id")
+        if not sub_id:
+            continue
+        try:
+            detail = fetch_submission_detail(session, csrf, str(sub_id))
+            opt = check_optimization_potential(detail, threshold)
+            if opt:
+                results.append(opt)
+        except Exception:
+            continue
+    return results
+
+
+_OPTIMIZE_JSON = PLAN_DIR / "optimizations.json"
+
+
+def _load_optimizations() -> list[dict]:
+    """从 JSON 文件加载所有优化建议。"""
+    if not _OPTIMIZE_JSON.exists():
+        return []
+    try:
+        return json.loads(_OPTIMIZE_JSON.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def _save_optimizations(data: list[dict]):
+    """保存优化建议到 JSON 文件。"""
+    _OPTIMIZE_JSON.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def update_optimize_file(filepath, optimizations: list[dict], today_str: str):
+    """将优化建议保存到 JSON（供 Web 看板使用）。"""
+    if not optimizations:
+        return
+
+    existing = _load_optimizations()
+    existing_keys = {(o.get("date"), o.get("title_slug")) for o in existing}
+
+    new_entries = []
+    for opt in optimizations:
+        key = (today_str, opt.get("title_slug", ""))
+        if key not in existing_keys:
+            opt["date"] = today_str
+            new_entries.append(opt)
+
+    if new_entries:
+        existing.extend(new_entries)
+        _save_optimizations(existing)
 
 
 def filter_today_ac(submissions: list[dict]) -> list[dict]:
@@ -772,9 +908,24 @@ def sync(interactive: bool = True):
     if review_due:
         print(f"   明日待复习：{len(review_due)} 题")
 
+    print("\n7. 正在分析提交代码优化空间...")
+    hot100_today_subs = [s for s in today_subs if s["titleSlug"] in matched_slugs]
+    optimizations = analyze_submissions_for_optimization(
+        creds["session"], creds["csrf"], hot100_today_subs,
+    )
+    if optimizations:
+        update_optimize_file(OPTIMIZE_FILE, optimizations, today_str)
+        opt_titles = [o["title"] for o in optimizations]
+        print(f"   检测到 {len(optimizations)} 道题有优化空间：{', '.join(opt_titles)}")
+        print(f"   详情已写入 {OPTIMIZE_FILE}")
+    else:
+        print("   所有提交性能表现良好，无需优化")
+
     msg = f"新题 {len(new_problems)} 道，复习 {len(review_problems)} 道"
     if hot100_struggles:
         msg += f"，卡点 {len(hot100_struggles)} 道"
+    if optimizations:
+        msg += f"，{len(optimizations)} 道待优化"
     send_notification("LeetCode 同步完成", msg)
 
     print("\n=== 同步完成 ===")
@@ -865,8 +1016,13 @@ def cmd_web(port: int):
     _, rows = parse_progress_table(PROGRESS_FILE)
     stats = _compute_stats(rows)
     checkin_data = parse_checkin_data(CHECKIN_FILE)
-    streak, _ = _compute_streak(CHECKIN_FILE)
-    serve_web(rows, stats, checkin_data, streak, port)
+    streak, total_days = _compute_streak(CHECKIN_FILE)
+    today_date = date.today()
+    review_due = _get_review_due(rows, today_date)
+    est = _estimate_completion(stats, total_days)
+    optimizations = _load_optimizations()
+    serve_web(rows, stats, checkin_data, streak, total_days,
+              review_due, optimizations, est, port)
 
 
 def cmd_weakness():
@@ -943,6 +1099,58 @@ def cmd_remind_daemon(arg: str):
         install_remind_daemon()
 
 
+def cmd_optimize():
+    """查看待优化题目列表。"""
+    ensure_plan_files(PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE)
+    optimizations = _load_optimizations()
+    if not optimizations:
+        print("暂无优化建议，运行 leetcode 同步后会自动检测。")
+        print("也可使用 leetcode --web 在浏览器中查看。")
+        return
+
+    try:
+        from rich.console import Console
+        from rich.table import Table
+        from rich import box
+
+        console = Console()
+        table = Table(title="待优化题目", box=box.ROUNDED, show_lines=True)
+        table.add_column("日期", width=10)
+        table.add_column("题目", style="bold", width=20)
+        table.add_column("语言", width=8)
+        table.add_column("运行时间", width=12)
+        table.add_column("时间排名", width=10)
+        table.add_column("内存", width=12)
+        table.add_column("内存排名", width=10)
+
+        for o in optimizations:
+            rt_pct = o.get("runtime_pct", 0) or 0
+            mem_pct = o.get("memory_pct", 0) or 0
+            rt_style = "red" if rt_pct < 30 else ("yellow" if rt_pct < 50 else "green")
+            mem_style = "red" if mem_pct < 30 else ("yellow" if mem_pct < 50 else "green")
+            table.add_row(
+                o.get("date", ""),
+                o.get("title", ""),
+                o.get("lang", ""),
+                o.get("runtime", ""),
+                f"[{rt_style}]{rt_pct:.1f}%[/{rt_style}]",
+                o.get("memory", ""),
+                f"[{mem_style}]{mem_pct:.1f}%[/{mem_style}]",
+            )
+
+        console.print()
+        console.print(table)
+        console.print("\n使用 leetcode --web 在浏览器中查看详细代码和建议。")
+    except ImportError:
+        print("=== 待优化题目 ===\n")
+        for o in optimizations:
+            print(f"  [{o.get('date', '')}] {o.get('title', '')}（{o.get('lang', '')}）")
+            print(f"    运行时间：{o.get('runtime', '')}（击败 {o.get('runtime_pct', 0):.1f}%）")
+            print(f"    内存使用：{o.get('memory', '')}（击败 {o.get('memory_pct', 0):.1f}%）")
+            print()
+        print("使用 leetcode --web 在浏览器中查看详细代码和建议。")
+
+
 def cmd_report():
     from .features import generate_weekly_report, parse_checkin_data
     ensure_plan_files(PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE)
@@ -966,6 +1174,7 @@ def main():
             "  leetcode --weakness   分类薄弱点分析\n"
             "  leetcode --report     生成每周报告\n"
             "  leetcode --badge      生成 SVG 进度徽章\n"
+            "  leetcode --optimize   查看待优化题目列表\n"
             "  leetcode --daemon 30m    每 30 分钟后台同步\n"
             "  leetcode --daemon 1h     每小时后台同步\n"
             "  leetcode --daemon 23:00  每天 23:00 后台同步\n"
@@ -986,11 +1195,14 @@ def main():
     parser.add_argument("--badge", action="store_true",
                         help="生成 SVG 进度徽章")
     parser.add_argument("--web", nargs="?", const=8100, type=int,
-                        metavar="PORT", help="启动本地 Web 看板（默认端口 8100）")
+                        metavar="PORT",
+                        help="打开 Web 看板：进度/打卡/复习/优化（默认端口 8100）")
     parser.add_argument("--weakness", action="store_true",
                         help="分类薄弱点分析")
     parser.add_argument("--report", action="store_true",
                         help="生成每周报告")
+    parser.add_argument("--optimize", action="store_true",
+                        help="查看待优化题目列表")
     parser.add_argument("--daemon", nargs="?", const="status",
                         metavar="SCHEDULE",
                         help="后台定时任务：30m/1h/23:00/status/stop")
@@ -1017,6 +1229,8 @@ def main():
         cmd_weakness()
     elif args.report:
         cmd_report()
+    elif args.optimize:
+        cmd_optimize()
     elif args.remind:
         remind()
     elif args.daemon is not None:

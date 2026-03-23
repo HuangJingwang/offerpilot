@@ -274,6 +274,9 @@ def _gen_master_plan(today_str: str) -> str:
 def ensure_plan_files(plan_dir: Path, progress_file: Path,
                       checkin_file: Path, dashboard_file: Path):
     """检查刷题计划文件是否存在，缺失则自动创建。"""
+    from .config import migrate_from_desktop
+    migrate_from_desktop()
+
     today_str = datetime.now(CST).strftime("%Y-%m-%d")
     created = []
 
