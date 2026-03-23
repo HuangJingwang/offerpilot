@@ -22,6 +22,31 @@ DASHBOARD_FILE = PLAN_DIR / "03_进度看板.md"
 OPTIMIZE_FILE = PLAN_DIR / "04_优化建议.md"
 
 
+# AI 分析配置（支持 claude / openai）
+AI_PROVIDER = os.getenv("AI_PROVIDER", "").lower()         # "claude" or "openai"
+AI_API_KEY = os.getenv("AI_API_KEY", "")
+AI_MODEL = os.getenv("AI_MODEL", "")                       # 留空则使用默认模型
+AI_BASE_URL = os.getenv("AI_BASE_URL", "")                 # 自定义 API 地址（可选）
+
+
+def get_ai_config() -> dict:
+    """返回 AI 配置，含默认模型。"""
+    provider = AI_PROVIDER
+    model = AI_MODEL
+    if not model:
+        if provider == "claude":
+            model = "claude-sonnet-4-20250514"
+        elif provider == "openai":
+            model = "gpt-4o"
+    return {
+        "provider": provider,
+        "api_key": AI_API_KEY,
+        "model": model,
+        "base_url": AI_BASE_URL,
+        "enabled": bool(provider and AI_API_KEY),
+    }
+
+
 def migrate_from_desktop():
     """如果旧桌面目录有数据而新目录没有，自动迁移。"""
     if not _OLD_PLAN_DIR.exists():

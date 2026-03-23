@@ -914,10 +914,19 @@ def sync(interactive: bool = True):
         creds["session"], creds["csrf"], hot100_today_subs,
     )
     if optimizations:
+        # AI 深度分析
+        from .config import get_ai_config
+        ai_config = get_ai_config()
+        if ai_config["enabled"]:
+            print(f"\n8. AI 深度分析（{ai_config['provider']}/{ai_config['model']}）...")
+            from .ai_analyzer import batch_analyze
+            optimizations = batch_analyze(
+                optimizations, creds["session"], creds["csrf"],
+            )
+
         update_optimize_file(OPTIMIZE_FILE, optimizations, today_str)
         opt_titles = [o["title"] for o in optimizations]
         print(f"   检测到 {len(optimizations)} 道题有优化空间：{', '.join(opt_titles)}")
-        print(f"   详情已写入 {OPTIMIZE_FILE}")
     else:
         print("   所有提交性能表现良好，无需优化")
 

@@ -85,6 +85,9 @@ def _build_comprehensive_data(
             "category": cat,
         })
 
+    diff_order = {"简单": 0, "中等": 1, "困难": 2}
+    new_todo.sort(key=lambda x: diff_order.get(x["difficulty"], 1))
+
     # 构建打卡记录
     checkins = []
     for e in reversed(checkin_data):
@@ -233,6 +236,16 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 .code-toggle:hover { background:rgba(88,166,255,0.1); }
 .code-block { display:none; margin-top:10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px; font-family:'SF Mono',Monaco,monospace; font-size:12px; overflow-x:auto; white-space:pre; max-height:400px; overflow-y:auto; line-height:1.5; }
 .code-block.show { display:block; }
+.ai-section { margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+.ai-label { font-size:12px; color:var(--accent); font-weight:600; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.ai-label::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); }
+.ai-content { font-size:13px; line-height:1.7; color:var(--text); }
+.ai-content h3 { font-size:13px; color:var(--accent); margin:10px 0 4px; }
+.ai-content code { background:var(--bg); padding:1px 5px; border-radius:3px; font-size:12px; }
+.ai-content pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; margin:6px 0; font-size:12px; overflow-x:auto; line-height:1.5; }
+.ai-content ul,.ai-content ol { margin-left:18px; }
+.ai-toggle { background:none; border:1px solid var(--accent); color:var(--accent); padding:4px 12px; border-radius:4px; cursor:pointer; font-size:12px; margin-left:8px; }
+.ai-toggle:hover { background:rgba(88,166,255,0.1); }
 
 /* Empty state */
 .empty-state { text-align:center; padding:60px 20px; color:var(--dim); }
@@ -670,6 +683,27 @@ renderTable();
 })();
 
 // ====== Optimization ======
+function mdToHtml(md){
+  if(!md) return '';
+  var s=md;
+  // code blocks
+  s=s.replace(/```(\w*)\n([\s\S]*?)```/g,function(_,lang,code){
+    return '<pre><code>'+code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</code></pre>';
+  });
+  // inline code
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  // headers
+  s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  s=s.replace(/^## (.+)$/gm,'<h3>$1</h3>');
+  // bold
+  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  // list items
+  s=s.replace(/^- (.+)$/gm,'<li>$1</li>');
+  s=s.replace(/^(\d+)\. (.+)$/gm,'<li>$2</li>');
+  // paragraphs
+  s=s.replace(/\n{2,}/g,'</p><p>');
+  return '<p>'+s+'</p>';
+}
 (function(){
   var container=document.getElementById('optimize-list');
   var count=document.getElementById('opt-count');
@@ -688,17 +722,40 @@ renderTable();
     var sugs='';
     if(o.suggestions){o.suggestions.forEach(function(s){sugs+='<li>'+s+'</li>';});}
 
+    var aiHtml='';
+    if(o.ai_analysis){
+      aiHtml='<div class="ai-section">'
+        +'<div class="ai-label">AI Analysis <button class="ai-toggle" onclick="var b=document.getElementById(\'ai-'+i+'\');b.style.display=b.style.display===\'none\'?\'block\':\'none\';this.textContent=b.style.display===\'none\'?\'Show\':\'Hide\';">Hide</button></div>'
+        +'<div class="ai-content" id="ai-'+i+'">'+mdToHtml(o.ai_analysis)+'</div>'
+        +'</div>';
+    }
+
     html+='<div class="opt-card">'
-      +'<div class="opt-header"><span class="opt-title">'+o.title+'</span><span class="opt-lang">'+o.lang+'</span></div>'
+      +'<div class="opt-header"><span class="opt-title">'+o.title+'</span><span class="opt-lang">'+(o.lang||'')+'</span></div>'
       +'<div class="opt-metrics">'
-      +'<div class="opt-metric">Runtime: '+o.runtime+' <div class="pct-bar"><div class="pct-fill '+rtClass+'" style="width:'+rtPct+'%"></div></div> '+rtPct.toFixed(1)+'%</div>'
-      +'<div class="opt-metric">Memory: '+o.memory+' <div class="pct-bar"><div class="pct-fill '+memClass+'" style="width:'+memPct+'%"></div></div> '+memPct.toFixed(1)+'%</div>'
+      +'<div class="opt-metric">Runtime: '+(o.runtime||'N/A')+' <div class="pct-bar"><div class="pct-fill '+rtClass+'" style="width:'+rtPct+'%"></div></div> '+rtPct.toFixed(1)+'%</div>'
+      +'<div class="opt-metric">Memory: '+(o.memory||'N/A')+' <div class="pct-bar"><div class="pct-fill '+memClass+'" style="width:'+memPct+'%"></div></div> '+memPct.toFixed(1)+'%</div>'
       +'</div>'
       +(sugs?'<ul class="opt-suggestions">'+sugs+'</ul>':'')
+      +aiHtml
       +(o.code?'<button class="code-toggle" onclick="var b=document.getElementById(\'code-'+i+'\');b.classList.toggle(\'show\');this.textContent=b.classList.contains(\'show\')?\'Hide Code\':\'Show Code\';">Show Code</button><pre class="code-block" id="code-'+i+'">'+o.code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>':'')
       +'</div>';
   });
   container.innerHTML=html;
+})();
+
+// ====== Auto Refresh ======
+(function(){
+  var fingerprint=D.done_rounds+'|'+D.done_problems+'|'+(D.review_due?D.review_due.length:0)+'|'+(D.optimizations?D.optimizations.length:0)+'|'+(D.new_todo?D.new_todo.length:0);
+  setInterval(function(){
+    fetch('/api/data').then(r=>r.json()).then(function(nd){
+      var nf=nd.done_rounds+'|'+nd.done_problems+'|'+(nd.review_due?nd.review_due.length:0)+'|'+(nd.optimizations?nd.optimizations.length:0)+'|'+(nd.new_todo?nd.new_todo.length:0);
+      if(nf!==fingerprint){
+        fingerprint=nf;
+        location.reload();
+      }
+    }).catch(function(){});
+  }, 30000);
 })();
 </script>
 </body>
@@ -708,6 +765,28 @@ renderTable();
 # ---------------------------------------------------------------------------
 # HTTP 服务
 # ---------------------------------------------------------------------------
+
+
+def _reload_data() -> dict:
+    """从文件重新读取所有数据，供 /api/data 实时返回最新状态。"""
+    from .sync import (
+        parse_progress_table, _compute_stats, _compute_streak,
+        _get_review_due, _estimate_completion, _load_optimizations,
+    )
+    from .features import parse_checkin_data
+    from .config import PROGRESS_FILE, CHECKIN_FILE
+
+    _, rows = parse_progress_table(PROGRESS_FILE)
+    stats = _compute_stats(rows)
+    checkin_data = parse_checkin_data(CHECKIN_FILE)
+    streak, total_days = _compute_streak(CHECKIN_FILE)
+    review_due = _get_review_due(rows, date.today())
+    est = _estimate_completion(stats, total_days)
+    optimizations = _load_optimizations()
+    return _build_comprehensive_data(
+        rows, stats, checkin_data, streak,
+        total_days, review_due, optimizations, est,
+    )
 
 
 def serve_web(
@@ -747,7 +826,8 @@ def serve_web(
     class Handler(SimpleHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/api/data":
-                body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                fresh = _reload_data()
+                body = json.dumps(fresh, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
