@@ -618,7 +618,7 @@ var I18N={
     chat_welcome:'你好！我是 BrushUp AI 助手，可以帮你：<br>- 查看刷题进度和统计<br>- 推荐今天该刷的题<br>- 分析薄弱环节<br>- 制定学习计划<br>- 解答算法问题<br><br>有什么想问的？',
     chat_ph:'输入问题...',btn_send:'发送',btn_clear:'清空',
     confirm_clear:'确定清空所有对话记录？',confirm_clear_resume:'确定清空简历对话记录？',
-    chat_cleared:'对话已清空，有什么想问的？',thinking:''+t('thinking')+'',net_error:''+t('net_error')+'',
+    chat_cleared:'对话已清空，有什么想问的？',thinking:'思考中...',net_error:'网络错误',
     analysis_fail:'分析失败',paste_first:'请先粘贴简历内容',
     data_updated:'数据更新：__TODAY__',
   },
