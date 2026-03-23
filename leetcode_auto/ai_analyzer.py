@@ -150,8 +150,8 @@ def _build_prompt(opt: dict, solution_info: dict) -> str:
 
 def _call_claude(prompt: str, config: dict) -> Optional[str]:
     """调用 Claude API。"""
-    base_url = config.get("base_url") or "https://api.anthropic.com"
-    url = f"{base_url.rstrip('/')}/v1/messages"
+    base_url = config.get("base_url") or "https://api.anthropic.com/v1"
+    url = f"{base_url.rstrip('/')}/messages"
     headers = {
         "Content-Type": "application/json",
         "x-api-key": config["api_key"],
@@ -176,8 +176,8 @@ def _call_claude(prompt: str, config: dict) -> Optional[str]:
 
 def _call_openai(prompt: str, config: dict) -> Optional[str]:
     """调用 OpenAI API。"""
-    base_url = config.get("base_url") or "https://api.openai.com"
-    url = f"{base_url.rstrip('/')}/v1/chat/completions"
+    base_url = config.get("base_url") or "https://api.openai.com/v1"
+    url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {config['api_key']}",
