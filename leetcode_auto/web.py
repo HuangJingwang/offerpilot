@@ -748,12 +748,18 @@ function switchLang(lang){
 const D = __DATA_JSON__;
 
 // ====== Tab Navigation ======
+function switchTab(tabName){
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active')});
+  document.querySelectorAll('.tab-content').forEach(function(tc){tc.classList.remove('active')});
+  var navEl=document.querySelector('[data-tab="'+tabName+'"]');
+  if(navEl) navEl.classList.add('active');
+  var tabEl=document.getElementById('tab-'+tabName);
+  if(tabEl) tabEl.classList.add('active');
+  location.hash=tabName;
+}
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    item.classList.add('active');
-    document.getElementById('tab-' + item.dataset.tab).classList.add('active');
+    switchTab(item.dataset.tab);
     // Resize charts when switching to dashboard
     if (item.dataset.tab === 'dashboard') {
       setTimeout(() => {
@@ -1445,11 +1451,7 @@ function mdToHtml(md){
     fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(newCfg)
     }).then(r=>r.json()).then(function(d){
-      if(d.ok){
-        var btn=document.getElementById('settings-save-btn');
-        btn.textContent=t('settings_saved');
-        setTimeout(function(){btn.textContent=t('settings_save');},2000);
-      }
+      if(d.ok){ location.hash='settings'; location.reload(); }
     });
   });
 })();
@@ -1468,8 +1470,9 @@ function mdToHtml(md){
   }, 30000);
 })();
 
-// ====== Apply Language ======
+// ====== Apply Language + Restore Tab ======
 applyLang();
+if(location.hash){var ht=location.hash.slice(1);if(document.getElementById('tab-'+ht)) switchTab(ht);}
 </script>
 </body>
 </html>"""
@@ -1514,27 +1517,26 @@ def serve_web(
     port: int = 8100,
 ):
     """启动本地 Web 看板服务。"""
-    data = _build_comprehensive_data(
-        rows, stats, checkin_data, streak,
-        total_days, review_due, optimizations, est,
-    )
-    today_str = date.today().strftime("%Y-%m-%d")
-    streak_class = "fire" if streak >= 3 else ""
 
-    html = _HTML_TEMPLATE
-    html = html.replace("__DATA_JSON__", json.dumps(data, ensure_ascii=False))
-    html = html.replace("__DONE_ROUNDS__", str(stats["done_rounds"]))
-    html = html.replace("__TOTAL_ROUNDS__", str(stats["total_rounds"]))
-    html = html.replace("__RATE__", f"{stats['rate']:.1f}")
-    html = html.replace("__DONE_ALL__", str(stats["done_problems"]))
-    html = html.replace("__TOTAL__", str(stats["total"]))
-    html = html.replace("__STREAK__", str(streak))
-    html = html.replace("__STREAK_CLASS__", streak_class)
-    html = html.replace("__TOTAL_DAYS__", str(total_days))
-    html = html.replace("__EST__", est)
-    html = html.replace("__TODAY__", today_str)
-
-    html_bytes = html.encode("utf-8")
+    def _render_html() -> bytes:
+        """每次请求时重新生成 HTML（配置变更后立即生效）。"""
+        fresh = _reload_data()
+        today_str = date.today().strftime("%Y-%m-%d")
+        s = fresh
+        streak_class = "fire" if s.get("streak", 0) >= 3 else ""
+        html = _HTML_TEMPLATE
+        html = html.replace("__DATA_JSON__", json.dumps(fresh, ensure_ascii=False))
+        html = html.replace("__DONE_ROUNDS__", str(s["done_rounds"]))
+        html = html.replace("__TOTAL_ROUNDS__", str(s["total_rounds"]))
+        html = html.replace("__RATE__", f"{s['rate']:.1f}")
+        html = html.replace("__DONE_ALL__", str(s["done_problems"]))
+        html = html.replace("__TOTAL__", str(s["total"]))
+        html = html.replace("__STREAK__", str(s["streak"]))
+        html = html.replace("__STREAK_CLASS__", streak_class)
+        html = html.replace("__TOTAL_DAYS__", str(s["total_days"]))
+        html = html.replace("__EST__", str(s["est"]))
+        html = html.replace("__TODAY__", today_str)
+        return html.encode("utf-8")
 
     class Handler(SimpleHTTPRequestHandler):
         def do_GET(self):
@@ -1590,11 +1592,12 @@ def serve_web(
                 self.end_headers()
                 self.wfile.write(body)
             else:
+                page = _render_html()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(html_bytes)))
+                self.send_header("Content-Length", str(len(page)))
                 self.end_headers()
-                self.wfile.write(html_bytes)
+                self.wfile.write(page)
 
         def do_POST(self):
             if self.path == "/api/chat":
