@@ -4,7 +4,7 @@
 
 **刷题如锻造，每遍皆淬炼。**
 
-你的 LeetCode Hot100 刷题锻造台 —— 自动同步、智能复习、代码优化检测、交互式 Web 看板，一站搞定。
+你的 LeetCode Hot100 刷题锻造台 —— 自动同步、智能复习、AI 代码分析、交互式 Web 看板，一站搞定。
 
 [![Python](https://img.shields.io/badge/Python-3.9+-3776ab?logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -22,8 +22,9 @@ LeetForge 帮你解决这些问题：
 
 - **自动同步** — 每天自动拉取 LeetCode CN AC 记录，零手动输入
 - **间隔复习** — 基于艾宾浩斯遗忘曲线，精准推送今日待复习题目
-- **代码优化** — 自动检测提交代码的性能表现，标记有优化空间的题目
-- **Web 看板** — 交互式 Web 界面查看全部数据，取代桌面 Markdown 文件
+- **AI 分析** — 自动对比官方题解，给出代码优化建议和改进代码
+- **AI 对话** — 随时询问刷题进度、制定计划、获取算法建议
+- **Web 看板** — 6 标签页交互式 Web 界面，进度/复习/优化/对话一站查看
 
 ## Quick Start
 
@@ -52,7 +53,7 @@ leetcode --daemon 23:00     # 或每天固定时间
 
 ## Features
 
-### 一键同步 + 代码优化检测
+### 一键同步 + AI 代码分析
 
 ```bash
 leetcode
@@ -61,6 +62,7 @@ leetcode
 自动拉取今日 AC 提交，匹配 Hot100 题目，智能判断当前轮次（R1→R5），写入完成日期。同时：
 - 追加每日打卡记录、刷新进度看板
 - **自动分析每道提交的 runtime/memory 百分位**，低于 50% 的题目标记为待优化
+- **AI 自动获取官方题解对比分析**，给出时间/空间复杂度对比、优化建议和改进代码
 - 仅在有新 AC 同步时弹桌面通知，无 AC 时静默跳过
 
 ### Web 看板
@@ -70,17 +72,35 @@ leetcode --web          # 默认端口 8100
 leetcode --web 3000     # 自定义端口
 ```
 
-自动打开浏览器，GitHub 暗色风格交互式看板，包含 **5 个标签页**：
+自动打开浏览器，GitHub 暗色风格交互式看板，包含 **6 个标签页**：
 
 | 标签页 | 内容 |
 |--------|------|
-| **Dashboard** | 统计卡片、完成率仪表盘、各轮进度柱状图、分类能力雷达图、每日趋势图、年度热力图 |
-| **Progress** | 100 题完整进度表，支持按题名搜索、按难度/分类/状态筛选，点击跳转 LeetCode |
-| **Checkin** | 每日打卡时间线 + 近 30 天趋势折线图 |
+| **Dashboard** | 统计卡片、今日新题/复习推荐、完成率仪表盘、各轮进度图、分类雷达图、趋势图、热力图 |
+| **AI Chat** | AI 对话助手，基于刷题数据回答问题、制定计划、解答算法疑问，对话记录自动保存 |
+| **Progress** | 100 题完整进度表，支持搜索、按难度/分类/状态筛选，一键清除筛选条件 |
 | **Review** | 今日待复习题目列表，按逾期天数排序，导航栏显示待复习数量 |
-| **Optimize** | 代码优化建议，展示 runtime/memory 百分位进度条，可展开查看原始代码 |
+| **Check-in** | 每日打卡时间线 + 近 30 天趋势折线图 |
+| **Optimize** | AI 代码分析结果，展示复杂度对比、优化建议、改进代码，可展开查看原始代码 |
+
+看板支持 **30 秒自动刷新**，后台同步完成后页面自动更新，无需手动刷新。移动端自适应底部导航栏。
 
 > 所有数据存储在 `~/.leetcode_auto/data/`，不再在桌面创建 Markdown 文件。已有桌面数据会在首次运行时自动迁移。
+
+### AI 对话助手
+
+```bash
+leetcode --chat         # 终端交互式对话
+```
+
+或在 Web 看板的 **AI Chat** 标签页中直接对话。AI 助手基于你的真实刷题数据，可以：
+
+- 告诉你今天该刷什么题
+- 分析你的薄弱分类并制定专项突破计划
+- 回答算法和数据结构问题
+- 帮你制定每周/每月刷题计划
+
+对话记录自动保存，CLI 和 Web 共享同一份历史，输入 `clear` 可清空。
 
 ### 每日提醒
 
@@ -141,29 +161,13 @@ leetcode --status
 
 基于 [Rich](https://github.com/Textualize/rich) 渲染，包含总览、各轮进度条、分类薄弱点、智能复习提醒、新题建议。
 
-### 刷题热力图
-
-```bash
-leetcode --heatmap
-```
-
-```
-╭───── 刷题热力图（近 6 个月）─────╮
-│ Mon ░ ░ ▒ ░ ░ █ ░ ░ ░ ░ ▓ ░ ░  │
-│ Wed ░ ░ ░ ░ ░ ░ ░ ▒ ░ ░ ░ ░ ░  │
-│ Fri ░ ▒ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░ ░  │
-│  Less ░ ▒ ▓ █ More              │
-╰──────────────────────────────────╯
-```
-
-GitHub Contribution 风格，在终端中渲染每日刷题密度。
-
 ### 全部命令
 
 | 命令 | 说明 |
 |:-----|:-----|
-| `leetcode` | 同步今日刷题记录 + 代码优化检测 |
-| `leetcode --web` | 打开 Web 看板（进度/打卡/复习/优化） |
+| `leetcode` | 同步今日刷题记录 + AI 代码分析 |
+| `leetcode --web` | 打开 Web 看板（6 标签页全功能界面） |
+| `leetcode --chat` | AI 对话助手（终端交互式） |
 | `leetcode --status` | 炫彩终端进度面板 |
 | `leetcode --heatmap` | GitHub 风格刷题热力图 |
 | `leetcode --optimize` | 查看待优化题目列表 |
@@ -171,41 +175,29 @@ GitHub Contribution 风格，在终端中渲染每日刷题密度。
 | `leetcode --report` | 生成每周报告（Markdown） |
 | `leetcode --badge` | 生成 SVG 进度徽章，可嵌入 GitHub Profile |
 | `leetcode --login` | 重新打开浏览器登录 |
-| `leetcode --daemon 30m` | 每 30 分钟后台同步 |
-| `leetcode --daemon 1h` | 每小时后台同步 |
-| `leetcode --daemon 23:00` | 每天固定时间后台同步 |
-| `leetcode --daemon status` | 查看后台任务状态 |
-| `leetcode --daemon stop` | 卸载后台定时任务 |
+| `leetcode --daemon <schedule>` | 后台定时同步（30m / 1h / 23:00 / status / stop） |
 | `leetcode --remind` | 查看今日待刷/待复习题目并推送通知 |
-| `leetcode --remind-daemon` | 注册每日提醒（10:00/17:00/22:00） |
-| `leetcode --remind-daemon status` | 查看提醒任务状态 |
-| `leetcode --remind-daemon stop` | 卸载提醒任务 |
+| `leetcode --remind-daemon` | 每日提醒定时任务（start / status / stop） |
 | `leetcode --cron 23:00` | 前台定时同步（终端需保持运行） |
 
 ## How It Works
 
 ```
-┌───────────┐   submissionList   ┌──────────────┐
-│ LeetCode  │ ◄───────────────── │  LeetForge   │
-│    CN     │  GraphQL API       │              │
-└───────────┘  (filter AC,       │  ┌─ sync ──┐ │     ┌──────────────────────┐
-                extract slug     │  │ match   │ │────►│ ~/.leetcode_auto/    │
-                from url field)  │  │ Hot100  │ │     │  data/进度表.md       │
-                                 │  │ update  │ │     │  data/打卡.md         │
-               submissionDetail  │  │ rounds  │ │     │  data/optimizations   │
-              ◄───────────────── │  │ analyze │ │     └──────────────────────┘
-                (code, runtime%, │  │ optimize│ │
-                 memory%)        │  └─────────┘ │
-                                 │              │
-                                 │  ┌─ views ─┐ │     ┌──────────────────────┐
-                                 │  │ Web SPA │ │────►│ Browser (--web)      │
-                                 │  │ Rich TUI│ │     │ Terminal (--status)  │
-                                 │  │ Heatmap │ │     └──────────────────────┘
-                                 │  └─────────┘ │
-                                 └──────────────┘
+                                 ┌──────────────┐
+┌───────────┐   submissionList   │  LeetForge   │     ┌──────────────────────┐
+│ LeetCode  │ ◄───────────────── │              │     │ ~/.leetcode_auto/    │
+│    CN     │  GraphQL API       │  ┌─ sync ──┐ │────►│  data/进度表.md       │
+└───────────┘                    │  │ match   │ │     │  data/打卡.md         │
+               submissionDetail  │  │ Hot100  │ │     │  data/optimizations   │
+              ◄───────────────── │  │ update  │ │     │  data/chat_history    │
+                                 │  └─────────┘ │     └──────────────────────┘
+┌───────────┐   official soln    │              │
+│    AI     │ ◄───────────────── │  ┌─ AI ────┐ │     ┌──────────────────────┐
+│  Claude / │   code analysis    │  │ analyze │ │────►│ Browser (--web)      │
+│  OpenAI   │ ◄───────────────── │  │ chat    │ │     │ Terminal (--status)  │
+└───────────┘   chat response    │  └─────────┘ │     │ Terminal (--chat)    │
+                                 └──────────────┘     └──────────────────────┘
 ```
-
-> **API 说明**：LeetCode CN 已下线 `recentACSubmissions` 和 `recentSubmissions` 字段，LeetForge 现统一使用 `submissionList` 接口，通过返回的 `url` 字段（`/problems/{titleSlug}/submissions/...`）解析题目标识。同步时额外调用 `submissionDetail` 获取代码和性能百分位数据。
 
 **间隔复习算法：**
 
@@ -217,11 +209,12 @@ GitHub Contribution 风格，在终端中渲染每日刷题密度。
 | R4 | +7 天 | 中期巩固 |
 | R5 | +14 天 | 长期记忆 |
 
-LeetForge 自动追踪每道题的 R1~R5 完成日期，精准计算哪些题今日到期需要复习。
+**AI 代码分析流程：**
 
-**代码优化检测：**
-
-每次同步时，LeetForge 通过 `submissionDetail` API 获取每道 AC 提交的 runtime 和 memory 百分位。若击败用户比例低于 50%，则标记为有优化空间，记录到优化建议中，在 Web 看板的 Optimize 标签页可查看代码和改进方向。
+1. 同步时检测 AC 提交的 runtime/memory 百分位，低于 50% 标记为待优化
+2. 通过 LeetCode API 获取官方题解
+3. 调用 AI（Claude / OpenAI）对比用户代码与最优解
+4. 输出：复杂度对比、问题分析、优化建议、改进后完整代码
 
 ## Installation
 
@@ -254,13 +247,31 @@ pip install -e .
 | 文件/目录 | 说明 |
 |:----------|:-----|
 | `cookies.json` | 浏览器登录后自动保存的凭证 |
-| `.env` | 可选的手动配置文件 |
+| `.env` | 配置文件（AI、数据路径等） |
 | `data/` | 进度表、打卡记录、优化建议等数据文件 |
+| `chat_history.json` | AI 对话记录（CLI 和 Web 共享） |
 | `sync.log` | 后台同步日志 |
 
-### 自定义数据路径
+### AI 配置
 
-默认数据存储在 `~/.leetcode_auto/data/`，可通过环境变量修改：
+在 `~/.leetcode_auto/.env` 中配置 AI Provider（支持 Claude 和 OpenAI 及兼容接口）：
+
+```bash
+# OpenAI 或兼容接口
+AI_PROVIDER=openai
+AI_API_KEY=sk-xxx
+AI_MODEL=gpt-4o                       # 可选，留空用默认
+AI_BASE_URL=https://api.openai.com/v1 # 可选，自定义 API 地址
+
+# 或使用 Claude
+AI_PROVIDER=claude
+AI_API_KEY=sk-ant-xxx
+AI_MODEL=claude-sonnet-4-20250514     # 可选，留空用默认
+```
+
+未配置 AI 时，同步和看板正常工作，仅跳过 AI 分析和对话功能。
+
+### 自定义数据路径
 
 ```bash
 # ~/.leetcode_auto/.env
@@ -287,12 +298,13 @@ leetcode_auto/
 ├── setup.py                # pip 向后兼容
 └── leetcode_auto/
     ├── __init__.py
-    ├── config.py            # 配置加载 & 凭证管理 & 数据迁移
+    ├── config.py            # 配置加载 & 凭证管理 & AI 配置 & 数据迁移
     ├── init_plan.py         # Hot100 题目列表 + 分类标签 + 模板生成
     ├── sync.py              # 核心同步引擎 + 代码优化检测 + CLI 入口
+    ├── ai_analyzer.py       # AI 代码分析 + 对话功能（支持 Claude / OpenAI）
     ├── daemon.py            # 后台守护：LaunchAgent / systemd / schtasks
     ├── features.py          # 可视化：Rich TUI / 热力图 / 徽章 / 周报
-    └── web.py               # Web 看板：多标签页 SPA + ECharts 可视化
+    └── web.py               # Web 看板：6 标签页 SPA + ECharts + AI Chat
 ```
 
 ## FAQ
@@ -311,9 +323,15 @@ leetcode_auto/
 </details>
 
 <details>
-<summary><b>代码优化检测是怎么工作的？</b></summary>
+<summary><b>AI 分析需要什么配置？</b></summary>
 
-每次同步时，LeetForge 通过 LeetCode 的 `submissionDetail` API 获取每道提交的 `runtimePercentile` 和 `memoryPercentile`。如果击败用户比例低于 50%，则标记为有优化空间。可通过 `leetcode --optimize` 或 `leetcode --web` 的 Optimize 标签页查看详情和原始代码。
+在 `~/.leetcode_auto/.env` 中设置 `AI_PROVIDER` 和 `AI_API_KEY` 即可。支持 OpenAI、Claude 以及任何兼容 OpenAI 接口的第三方服务（通过 `AI_BASE_URL` 指定地址）。未配置时 AI 功能自动跳过，不影响同步和看板使用。
+</details>
+
+<details>
+<summary><b>AI 对话记录会保存吗？</b></summary>
+
+会。对话记录保存在 `~/.leetcode_auto/chat_history.json`，最多保留最近 50 轮。CLI（`--chat`）和 Web（AI Chat 标签页）共享同一份历史。在 CLI 输入 `clear` 或 Web 点击"清空"按钮可重置。
 </details>
 
 <details>
@@ -325,7 +343,7 @@ leetcode_auto/
 <details>
 <summary><b>Web 看板需要联网吗？</b></summary>
 
-需要加载 ECharts CDN 资源，数据本身全在本地。
+需要加载 ECharts 和 marked.js CDN 资源，刷题数据本身全在本地。AI 对话功能需要联网调用 API。
 </details>
 
 <details>
