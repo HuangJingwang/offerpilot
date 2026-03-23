@@ -12,7 +12,8 @@ from .init_plan import SLUG_CATEGORY
 # 共享数据解析
 # ---------------------------------------------------------------------------
 
-ROUND_KEYS = ("r1", "r2", "r3", "r4", "r5")
+from .config import get_round_keys
+ROUND_KEYS = get_round_keys()
 
 
 def _is_done(val: str) -> bool:
@@ -104,15 +105,15 @@ def rich_status(rows, stats, review_due, streak, total_days, est, checkin_data):
     progress_table.add_column("进度条", width=30)
     progress_table.add_column("完成", justify="right", width=10)
 
-    colors = ["green", "yellow", "blue", "magenta", "red"]
-    for i, (label, rk) in enumerate([("R1", "r1"), ("R2", "r2"), ("R3", "r3"),
-                                      ("R4", "r4"), ("R5", "r5")]):
+    colors = ["green", "yellow", "blue", "magenta", "red", "cyan", "white"]
+    for i, rk in enumerate(ROUND_KEYS):
         done = stats["per_round"][rk]
         total = stats["total"]
         pct = done / total if total else 0
         bar_len = 25
         filled = int(pct * bar_len)
-        color = colors[i]
+        color = colors[i % len(colors)]
+        label = rk.upper()
         bar = f"[{color}]{'━' * filled}[/{color}][dim]{'─' * (bar_len - filled)}[/dim]"
         progress_table.add_row(label, bar, f"{done}/{total}")
 

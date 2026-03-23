@@ -16,6 +16,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Optional
 
 from .features import ROUND_KEYS, compute_category_stats
+from .config import load_plan_config, save_plan_config
 from .init_plan import SLUG_CATEGORY
 
 # ---------------------------------------------------------------------------
@@ -118,6 +119,7 @@ def _build_comprehensive_data(
             for r in review_due
         ],
         "new_todo": new_todo,
+        "plan_config": load_plan_config(),
         "optimizations": optimizations,
     }
 
@@ -311,6 +313,21 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 .resume-empty .icon { font-size:40px; margin-bottom:12px; }
 @media (max-width:768px) { .resume-layout { grid-template-columns:1fr; height:auto; } }
 
+/* Settings */
+.settings-form { max-width:600px; }
+.settings-group { margin-bottom:20px; }
+.settings-group label { display:block; font-size:13px; color:var(--dim); margin-bottom:6px; }
+.settings-group input,.settings-group select { background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; }
+.settings-group input:focus { border-color:var(--accent); }
+.settings-hint { font-size:11px; color:var(--border); margin-top:4px; }
+.settings-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.settings-save-btn { background:var(--accent); color:#fff; border:none; padding:10px 24px; border-radius:6px; font-size:14px; cursor:pointer; margin-top:8px; }
+.settings-save-btn:hover { opacity:0.9; }
+.pace-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; margin-top:20px; max-width:600px; }
+.pace-card h3 { font-size:14px; color:var(--dim); margin-bottom:10px; }
+.pace-row { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; border-bottom:1px solid rgba(48,54,61,0.5); }
+.pace-row:last-child { border:none; }
+
 /* Interview */
 .interview-layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; height:calc(100vh - 120px); }
 .interview-left { overflow-y:auto; }
@@ -408,6 +425,10 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
   </div>
   <div class="nav-item" data-tab="interview">
     <span class="nav-icon">&#127908;</span><span data-i18n="nav_interview">模拟面试</span>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-item" data-tab="settings">
+    <span class="nav-icon">&#9881;</span><span data-i18n="nav_settings">设置</span>
   </div>
   <div class="sidebar-footer">
     <div class="sidebar-info" data-i18n="data_updated">数据更新：__TODAY__</div>
@@ -570,6 +591,41 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
   </div>
 </div>
 
+<!-- ==================== 设置 ==================== -->
+<div class="tab-content" id="tab-settings">
+  <div class="page-title"><span class="icon">&#9881;</span> <span data-i18n="nav_settings">设置</span></div>
+  <div class="settings-form">
+    <div class="settings-row">
+      <div class="settings-group">
+        <label data-i18n="settings_rounds">复习轮数</label>
+        <input type="number" id="set-rounds" min="2" max="10" value="5">
+      </div>
+      <div class="settings-group">
+        <label data-i18n="settings_deadline">截止日期</label>
+        <input type="date" id="set-deadline" value="">
+        <div class="settings-hint" data-i18n="settings_deadline_hint">留空 = 不限制</div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <label data-i18n="settings_intervals">复习间隔（天）</label>
+      <input type="text" id="set-intervals" placeholder="1, 3, 7, 14">
+      <div class="settings-hint">R2, R3, R4, ... (comma separated)</div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-group">
+        <label data-i18n="settings_daily_new">每日新题建议</label>
+        <input type="number" id="set-daily-new" min="1" max="20" value="5">
+      </div>
+      <div class="settings-group">
+        <label data-i18n="settings_daily_review">每日复习建议</label>
+        <input type="number" id="set-daily-review" min="1" max="30" value="10">
+      </div>
+    </div>
+    <button class="settings-save-btn" id="settings-save-btn" data-i18n="settings_save">保存设置</button>
+  </div>
+  <div class="pace-card" id="pace-card"></div>
+</div>
+
 <!-- ==================== AI 对话 ==================== -->
 <div class="tab-content" id="tab-chat">
   <div class="page-title"><span class="icon">&#128172;</span> <span data-i18n="nav_chat">AI 对话</span></div>
@@ -621,6 +677,12 @@ var I18N={
     chat_cleared:'对话已清空，有什么想问的？',thinking:'思考中...',net_error:'网络错误',
     analysis_fail:'分析失败',paste_first:'请先粘贴简历内容',
     data_updated:'数据更新：__TODAY__',
+    nav_settings:'设置',
+    settings_rounds:'复习轮数',settings_intervals:'复习间隔（天）',
+    settings_daily_new:'每日新题建议',settings_daily_review:'每日复习建议',
+    settings_deadline:'截止日期',settings_deadline_hint:'留空 = 不限制',
+    settings_save:'保存设置',settings_saved:'已保存！需重启 Web 服务生效',
+    settings_daily_pace:'每日建议进度',settings_remaining:'剩余',settings_days_left:'剩余天数',
   },
   en:{
     nav_dashboard:'Dashboard',nav_chat:'AI Chat',nav_progress:'Progress',nav_review:'Review',
@@ -653,6 +715,12 @@ var I18N={
     chat_cleared:'Chat cleared. What would you like to ask?',thinking:'Thinking...',net_error:'Network error',
     analysis_fail:'Analysis failed',paste_first:'Please paste your resume first',
     data_updated:'Data: __TODAY__',
+    nav_settings:'Settings',
+    settings_rounds:'Review Rounds',settings_intervals:'Review Intervals (days)',
+    settings_daily_new:'Daily New Suggestion',settings_daily_review:'Daily Review Suggestion',
+    settings_deadline:'Deadline',settings_deadline_hint:'Empty = no limit',
+    settings_save:'Save Settings',settings_saved:'Saved! Restart web server to apply',
+    settings_daily_pace:'Suggested Daily Pace',settings_remaining:'Remaining',settings_days_left:'Days Left',
   }
 };
 var currentLang=localStorage.getItem('brushup_lang')||'en';
@@ -1330,6 +1398,62 @@ function mdToHtml(md){
   });
 })();
 
+// ====== Settings ======
+(function(){
+  var cfg=D.plan_config||{rounds:5,intervals:[1,3,7,14],daily_new:5,daily_review:10,deadline:''};
+  document.getElementById('set-rounds').value=cfg.rounds;
+  document.getElementById('set-intervals').value=cfg.intervals.join(', ');
+  document.getElementById('set-daily-new').value=cfg.daily_new;
+  document.getElementById('set-daily-review').value=cfg.daily_review;
+  document.getElementById('set-deadline').value=cfg.deadline||'';
+
+  function updatePace(){
+    var card=document.getElementById('pace-card');
+    var r1Done=D.per_round[0]||0;
+    var total=D.total;
+    var r1Remaining=total-r1Done;
+    var deadline=document.getElementById('set-deadline').value;
+    var dailyNew=parseInt(document.getElementById('set-daily-new').value)||5;
+    var html='<h3 data-i18n="settings_daily_pace">'+t('settings_daily_pace')+'</h3>';
+    html+='<div class="pace-row"><span>R1 '+t('settings_remaining')+'</span><span>'+r1Remaining+' / '+total+'</span></div>';
+    if(deadline){
+      var today=new Date();
+      var dl=new Date(deadline);
+      var daysLeft=Math.max(1,Math.ceil((dl-today)/(1000*60*60*24)));
+      var pace=Math.ceil(r1Remaining/daysLeft);
+      html+='<div class="pace-row"><span>'+t('settings_days_left')+'</span><span>'+daysLeft+'</span></div>';
+      html+='<div class="pace-row"><span style="color:var(--accent)">R1 '+t('settings_daily_new')+'</span><span style="color:var(--accent);font-weight:bold">'+pace+' / day</span></div>';
+    } else {
+      var daysNeeded=Math.ceil(r1Remaining/dailyNew);
+      html+='<div class="pace-row"><span>'+t('settings_daily_new')+' = '+dailyNew+'</span><span>~'+daysNeeded+' days</span></div>';
+    }
+    card.innerHTML=html;
+  }
+  updatePace();
+  document.getElementById('set-deadline').addEventListener('change',updatePace);
+  document.getElementById('set-daily-new').addEventListener('change',updatePace);
+
+  document.getElementById('settings-save-btn').addEventListener('click',function(){
+    var intervals=document.getElementById('set-intervals').value.split(',').map(function(s){return parseInt(s.trim())}).filter(function(n){return !isNaN(n)&&n>0});
+    var newCfg={
+      rounds:parseInt(document.getElementById('set-rounds').value)||5,
+      intervals:intervals,
+      daily_new:parseInt(document.getElementById('set-daily-new').value)||5,
+      daily_review:parseInt(document.getElementById('set-daily-review').value)||10,
+      deadline:document.getElementById('set-deadline').value||''
+    };
+    fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(newCfg)
+    }).then(r=>r.json()).then(function(d){
+      if(d.ok){
+        var btn=document.getElementById('settings-save-btn');
+        btn.textContent=t('settings_saved');
+        setTimeout(function(){btn.textContent=t('settings_save');},2000);
+      }
+    });
+  });
+})();
+
 // ====== Auto Refresh ======
 (function(){
   var fingerprint=D.done_rounds+'|'+D.done_problems+'|'+(D.review_due?D.review_due.length:0)+'|'+(D.optimizations?D.optimizations.length:0)+'|'+(D.new_todo?D.new_todo.length:0);
@@ -1523,6 +1647,20 @@ def serve_web(
                 else:
                     result = {"error": "unknown action"}
                 body = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == "/api/settings":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                try:
+                    req = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    req = {}
+                save_plan_config(req)
+                body = json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))

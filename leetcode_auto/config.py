@@ -47,6 +47,62 @@ def get_ai_config() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# 刷题计划配置
+# ---------------------------------------------------------------------------
+
+PLAN_CONFIG_FILE = DATA_DIR / "plan_config.json"
+
+_DEFAULT_PLAN_CONFIG = {
+    "rounds": 5,
+    "intervals": [1, 3, 7, 14],       # R2=+1d, R3=+3d, R4=+7d, R5=+14d
+    "daily_new": 5,                     # 每日新题建议数
+    "daily_review": 10,                 # 每日复习建议数
+    "deadline": "",                     # 截止日期，格式 YYYY-MM-DD，空=不设置
+}
+
+
+def load_plan_config() -> dict:
+    """加载计划配置，缺失则返回默认值。"""
+    config = dict(_DEFAULT_PLAN_CONFIG)
+    if PLAN_CONFIG_FILE.exists():
+        try:
+            saved = json.loads(PLAN_CONFIG_FILE.read_text(encoding="utf-8"))
+            config.update(saved)
+        except (json.JSONDecodeError, IOError):
+            pass
+    # 确保 intervals 长度 = rounds - 1
+    rounds = config["rounds"]
+    intervals = config["intervals"]
+    if len(intervals) < rounds - 1:
+        defaults = [1, 3, 7, 14, 30, 60, 90]
+        while len(intervals) < rounds - 1:
+            intervals.append(defaults[len(intervals)] if len(intervals) < len(defaults) else intervals[-1] * 2)
+    config["intervals"] = intervals[:rounds - 1]
+    return config
+
+
+def save_plan_config(config: dict):
+    """保存计划配置。"""
+    PLAN_CONFIG_FILE.write_text(
+        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_round_keys(config: dict = None) -> tuple:
+    """根据配置生成轮次键名 ('r1', 'r2', ...)。"""
+    if config is None:
+        config = load_plan_config()
+    return tuple(f"r{i}" for i in range(1, config["rounds"] + 1))
+
+
+def get_review_intervals(config: dict = None) -> dict:
+    """根据配置生成复习间隔字典 {'r2': 1, 'r3': 3, ...}。"""
+    if config is None:
+        config = load_plan_config()
+    intervals = config["intervals"]
+    return {f"r{i+2}": intervals[i] for i in range(len(intervals))}
+
+
 def migrate_from_desktop():
     """如果旧桌面目录有数据而新目录没有，自动迁移。"""
     if not _OLD_PLAN_DIR.exists():

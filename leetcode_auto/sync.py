@@ -46,17 +46,13 @@ from .config import (
     DASHBOARD_FILE,
     OPTIMIZE_FILE,
     load_credentials,
+    load_plan_config,
+    get_round_keys,
+    get_review_intervals,
 )
 from .init_plan import ensure_plan_files
 
 CST = timezone(timedelta(hours=8))
-
-REVIEW_INTERVALS = {
-    "r2": 1,
-    "r3": 3,
-    "r4": 7,
-    "r5": 14,
-}
 
 # ---------------------------------------------------------------------------
 # 0. 登录状态检测 & 浏览器登录
@@ -463,10 +459,14 @@ def detect_struggles(all_subs: list[dict], ac_slugs: set[str]) -> list[str]:
 # 2. 进度表解析 / 写入
 # ---------------------------------------------------------------------------
 
-ROUND_KEYS = ("r1", "r2", "r3", "r4", "r5")
+ROUND_KEYS = get_round_keys()
+REVIEW_INTERVALS = get_review_intervals()
 
 
 def parse_progress_table(filepath) -> tuple[list[str], list[dict]]:
+    num_rounds = len(ROUND_KEYS)
+    min_cols = 3 + num_rounds + 2  # seq/title/diff + R1..Rn + status/date
+
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
@@ -490,16 +490,20 @@ def parse_progress_table(filepath) -> tuple[list[str], list[dict]]:
             continue
         cells = [c.strip() for c in stripped.split("|")]
         cells = cells[1:-1]
-        if len(cells) < 10:
-            continue
+        if len(cells) < min_cols:
+            # 兼容旧表（5轮 = 10列），不足的轮次填空
+            while len(cells) < min_cols:
+                cells.insert(-2, "")
         slug_match = re.search(r"leetcode\.cn/problems/([^/]+)/", cells[1])
-        rows.append({
+        row = {
             "seq": cells[0], "title": cells[1], "difficulty": cells[2],
-            "r1": cells[3], "r2": cells[4], "r3": cells[5],
-            "r4": cells[6], "r5": cells[7],
-            "status": cells[8], "last_date": cells[9],
+            "status": cells[3 + num_rounds],
+            "last_date": cells[4 + num_rounds] if len(cells) > 4 + num_rounds else "—",
             "title_slug": slug_match.group(1) if slug_match else "",
-        })
+        }
+        for i, rk in enumerate(ROUND_KEYS):
+            row[rk] = cells[3 + i] if 3 + i < len(cells) else ""
+        rows.append(row)
     return header_lines, rows
 
 
@@ -585,7 +589,7 @@ def update_progress(rows: list[dict], today_slugs: set[str], today_str: str):
 def _get_review_due(rows: list[dict], today: date) -> list[dict]:
     """计算今日到期复习的题目，返回 [{title, round, overdue_days}]。"""
     due = []
-    round_pairs = [("r1", "r2"), ("r2", "r3"), ("r3", "r4"), ("r4", "r5")]
+    round_pairs = [(ROUND_KEYS[i], ROUND_KEYS[i+1]) for i in range(len(ROUND_KEYS)-1)]
 
     for row in rows:
         for prev_rk, next_rk in round_pairs:
@@ -617,7 +621,8 @@ def _get_review_due(rows: list[dict], today: date) -> list[dict]:
 
 def _compute_stats(rows: list[dict]) -> dict:
     total = len(rows)
-    total_rounds = total * 5
+    num_rounds = len(ROUND_KEYS)
+    total_rounds = total * num_rounds
     done_rounds = 0
     done_problems = 0
     per_round = {rk: 0 for rk in ROUND_KEYS}
@@ -757,7 +762,7 @@ def update_dashboard(filepath, rows: list[dict], today_count: int,
         f"\n"
         f"## 总览\n"
         f"- 题目总数：{stats['total']}\n"
-        f"- 总轮次数：{stats['total_rounds']}（{stats['total']}×5）\n"
+        f"- 总轮次数：{stats['total_rounds']}（{stats['total']}×{len(ROUND_KEYS)}）\n"
         f"- 已完成轮次：{stats['done_rounds']}\n"
         f"- 今日完成轮次：{today_count}\n"
         f"- 完成率：{stats['rate']:.1f}%\n"
@@ -961,8 +966,8 @@ def status():
         print(f"已完成轮次：{stats['done_rounds']}/{stats['total_rounds']}（{stats['rate']:.1f}%）")
         print(f"5 轮全通题目：{stats['done_problems']}/{stats['total']}\n")
         bar_width = 20
-        for label, rk in [("R1", "r1"), ("R2", "r2"), ("R3", "r3"),
-                           ("R4", "r4"), ("R5", "r5")]:
+        for rk in ROUND_KEYS:
+            label = rk.upper()
             done = stats["per_round"][rk]
             filled = int(done / stats["total"] * bar_width) if stats["total"] else 0
             bar = "█" * filled + "░" * (bar_width - filled)
