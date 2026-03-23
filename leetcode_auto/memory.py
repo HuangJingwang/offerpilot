@@ -13,10 +13,10 @@ from .config import DATA_DIR, get_ai_config
 
 MEMORY_FILE = DATA_DIR / "shared_memory.json"
 
-# 压缩阈值：超过此消息数时触发压缩
-_COMPRESS_THRESHOLD = 30
-# 压缩后保留的最近消息数
-_KEEP_RECENT = 10
+# 压缩阈值：超过此消息数时触发压缩（约 40 轮对话）
+_COMPRESS_THRESHOLD = 80
+# 压缩后保留的最近消息数（约 15 轮完整对话）
+_KEEP_RECENT = 30
 
 
 # ---------------------------------------------------------------------------
