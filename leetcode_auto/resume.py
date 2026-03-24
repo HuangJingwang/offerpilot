@@ -180,9 +180,55 @@ def _current_id() -> str:
     return _load_resume_index().get("current", "default")
 
 
+_MAX_VERSIONS = 20
+
+
+def _versions_dir(resume_id: str) -> Path:
+    d = RESUMES_DIR / f"{resume_id}_versions"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def save_resume(content: str):
-    """保存当前简历内容。"""
-    _resume_path(_current_id()).write_text(content, encoding="utf-8")
+    """保存当前简历内容，同时存版本快照。"""
+    rid = _current_id()
+    p = _resume_path(rid)
+    # 保存版本快照（只在内容有变化时）
+    old = p.read_text(encoding="utf-8") if p.exists() else ""
+    if content.strip() and content.strip() != old.strip():
+        from datetime import datetime
+        vdir = _versions_dir(rid)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        (vdir / f"{ts}.txt").write_text(content, encoding="utf-8")
+        # 清理旧版本
+        versions = sorted(vdir.glob("*.txt"))
+        while len(versions) > _MAX_VERSIONS:
+            versions.pop(0).unlink()
+    p.write_text(content, encoding="utf-8")
+
+
+def get_resume_versions() -> list:
+    """返回当前简历的版本列表 [{ts, preview}]。"""
+    vdir = _versions_dir(_current_id())
+    versions = []
+    for f in sorted(vdir.glob("*.txt"), reverse=True):
+        text = f.read_text(encoding="utf-8")
+        preview = text[:80].replace("\n", " ")
+        ts = f.stem  # 20250324_153000
+        display = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}:{ts[13:15]}"
+        versions.append({"file": f.name, "display": display, "preview": preview})
+    return versions
+
+
+def restore_resume_version(filename: str) -> str:
+    """恢复指定版本。"""
+    vdir = _versions_dir(_current_id())
+    p = vdir / filename
+    if p.exists():
+        content = p.read_text(encoding="utf-8")
+        _resume_path(_current_id()).write_text(content, encoding="utf-8")
+        return content
+    return ""
 
 
 def load_resume() -> str:
@@ -466,3 +512,69 @@ def chat_interview(user_message: str, history: list,
             pass
 
     return reply
+
+
+# ---------------------------------------------------------------------------
+# 面试评估报告
+# ---------------------------------------------------------------------------
+
+INTERVIEW_REPORT_FILE = DATA_DIR / "interview_report.json"
+
+_REPORT_SYSTEM = """你是面试评估专家。请根据以下模拟面试的完整对话，生成一份结构化的评估报告。
+
+请严格按以下格式输出：
+
+## 总评
+- 综合评分：X / 10
+- 一句话总结
+
+## 各维度评分
+
+| 维度 | 评分 | 评语 |
+|------|------|------|
+| 项目深挖 | X/10 | 简短评语 |
+| 技术原理 | X/10 | 简短评语 |
+| 系统设计 | X/10 | 简短评语 |
+| 算法编程 | X/10 | 简短评语 |
+| 沟通表达 | X/10 | 简短评语 |
+| 应变能力 | X/10 | 简短评语 |
+
+## 亮点
+- 列出 2-3 个回答得好的地方
+
+## 需改进
+- 列出 3-5 个需要加强的地方，附具体建议
+
+## 推荐复习
+- 基于面试暴露的薄弱点，推荐 3-5 个需要复习的知识点
+
+用中文回答。"""
+
+
+def generate_interview_report(history: list) -> Optional[str]:
+    """根据面试对话生成评估报告。"""
+    ai_config = get_ai_config()
+    if not ai_config["enabled"] or not history:
+        return None
+
+    conv = ""
+    for m in history:
+        role = "面试官" if m["role"] == "assistant" else "候选人"
+        conv += f"{role}：{m['content']}\n\n"
+
+    messages = [{"role": "user", "content": f"请根据以下面试对话生成评估报告：\n\n{conv}"}]
+    result = call_ai_messages(messages, ai_config, system=_REPORT_SYSTEM)
+    if result:
+        INTERVIEW_REPORT_FILE.write_text(
+            json.dumps({"report": result}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+    return result
+
+
+def load_interview_report() -> str:
+    if INTERVIEW_REPORT_FILE.exists():
+        try:
+            return json.loads(INTERVIEW_REPORT_FILE.read_text(encoding="utf-8")).get("report", "")
+        except (json.JSONDecodeError, IOError):
+            pass
+    return ""

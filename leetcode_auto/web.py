@@ -17,11 +17,43 @@ from typing import Optional
 
 from .features import ROUND_KEYS, compute_category_stats
 from .config import load_plan_config, save_plan_config
+from datetime import timedelta
 from .init_plan import SLUG_CATEGORY
 
 # ---------------------------------------------------------------------------
 # 数据构建
 # ---------------------------------------------------------------------------
+
+
+def _compute_trends(checkin_data: list) -> dict:
+    """计算周/月趋势统计。"""
+    if not checkin_data:
+        return {"this_week": 0, "last_week": 0, "this_month": 0, "last_month": 0,
+                "avg_daily": 0, "week_change": 0}
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    last_week_start = week_start - timedelta(days=7)
+    month_start = today.replace(day=1)
+    if month_start.month == 1:
+        last_month_start = month_start.replace(year=month_start.year - 1, month=12)
+    else:
+        last_month_start = month_start.replace(month=month_start.month - 1)
+
+    tw = sum(e["total"] for e in checkin_data if e["date"] >= week_start)
+    lw = sum(e["total"] for e in checkin_data if last_week_start <= e["date"] < week_start)
+    tm = sum(e["total"] for e in checkin_data if e["date"] >= month_start)
+    lm = sum(e["total"] for e in checkin_data if last_month_start <= e["date"] < month_start)
+
+    recent_30 = [e for e in checkin_data if e["date"] >= today - timedelta(days=30)]
+    avg = sum(e["total"] for e in recent_30) / max(len(recent_30), 1)
+    change = ((tw - lw) / max(lw, 1) * 100) if lw > 0 else 0
+
+    return {
+        "this_week": tw, "last_week": lw,
+        "this_month": tm, "last_month": lm,
+        "avg_daily": round(avg, 1),
+        "week_change": round(change),
+    }
 
 
 def _build_comprehensive_data(
@@ -139,6 +171,8 @@ def _build_comprehensive_data(
         ],
         "new_todo": new_todo,
         "plan_config": load_plan_config(),
+        "ai_usage": __import__('leetcode_auto.ai_analyzer', fromlist=['get_ai_usage']).get_ai_usage(),
+        "trend_stats": _compute_trends(checkin_data),
         "available_lists": {k: {"name": v["name"], "name_en": v["name_en"], "count": len(v["problems"])} for k, v in __import__('leetcode_auto.problem_lists', fromlist=['PROBLEM_LISTS']).PROBLEM_LISTS.items()},
         "problem_data": get_all_problem_data(),
         "optimizations": optimizations,
@@ -551,6 +585,7 @@ body.light .progress-table th { background:#f6f8fa; }
     <div class="card"><h2 data-i18n="card_radar">分类能力</h2><div id="radar" class="chart"></div></div>
     <div class="card"><h2 data-i18n="card_trend">每日趋势</h2><div id="trend" class="chart"></div></div>
     <div class="card card-full"><h2 data-i18n="card_heatmap">刷题热力图（近 365 天）</h2><div id="heatmap" class="chart-lg"></div></div>
+    <div class="card card-full"><h2>Trend</h2><div id="trend-stats" style="display:flex;gap:20px;flex-wrap:wrap;padding:8px 0;font-size:14px;"></div></div>
     <div class="card card-full"><h2>Review Calendar (14 days)</h2><div id="review-calendar" style="display:flex;gap:8px;flex-wrap:wrap;"></div></div>
   </div>
 </div>
@@ -630,6 +665,7 @@ body.light .progress-table th { background:#f6f8fa; }
         <button id="resume-gen-interview-btn" data-i18n="resume_gen">生成面试题</button>
         <button id="resume-save-btn" data-i18n="resume_save">保存</button>
         <button class="preview-toggle" id="resume-preview-toggle" data-i18n="resume_preview">预览</button>
+        <button id="resume-versions-btn" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;">History</button>
       </div>
       <textarea class="resume-textarea" id="resume-input" placeholder="在此粘贴简历内容（Markdown 格式）...&#10;&#10;可下载 LapisCV 模板，填入信息后粘贴到此处，点击 Preview 预览。" data-i18n="resume_ph"></textarea>
     </div>
@@ -673,11 +709,13 @@ body.light .progress-table th { background:#f6f8fa; }
           <span>AI 面试官</span>
           <span class="interview-status status-idle" id="interview-status" data-i18n="interview_status_idle">未开始</span>
         </div>
+        <div id="interview-report-area" style="display:none;padding:12px 16px;overflow-y:auto;max-height:50%;border-bottom:1px solid var(--border);"></div>
         <div class="interview-chat-messages" id="interview-chat-messages"></div>
         <div class="chat-input-row" style="padding:12px;">
           <button id="interview-start-btn" class="primary" style="padding:10px 16px;" data-i18n="interview_start">开始面试</button>
           <input type="text" id="interview-chat-input" placeholder="输入你的回答..." autocomplete="off" disabled data-i18n="interview_ans_ph">
           <button id="interview-chat-send" disabled data-i18n="btn_send">发送</button>
+          <button id="interview-report-btn" style="background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;">Report</button>
           <button id="interview-chat-clear" style="background:var(--border);" data-i18n="btn_clear">重置</button>
         </div>
       </div>
@@ -1243,6 +1281,26 @@ function mdToHtml(md){
     chatMsgs.scrollTop=chatMsgs.scrollHeight;
   }
 
+  // Version history
+  document.getElementById('resume-versions-btn').addEventListener('click',function(){
+    fetch('/api/resume',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'list_versions'})
+    }).then(r=>r.json()).then(function(d){
+      var vs=d.versions||[];
+      if(!vs.length){alert('No version history yet');return;}
+      var msg=vs.map(function(v,i){return (i+1)+'. '+v.display+' - '+v.preview}).join('\n');
+      var idx=prompt('Select version to restore (1-'+vs.length+'):\n\n'+msg);
+      if(!idx) return;
+      var v=vs[parseInt(idx)-1];
+      if(!v) return;
+      fetch('/api/resume',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'restore_version',file:v.file})
+      }).then(r=>r.json()).then(function(d2){
+        if(d2.content!==undefined){input.value=d2.content;if(resumeLayout.classList.contains('preview-mode')){previewContent.innerHTML=typeof marked!=='undefined'?marked.parse(d2.content):d2.content;}}
+      });
+    });
+  });
+
   // Preview toggle
   previewToggle.addEventListener('click',function(){
     var isPreview=resumeLayout.classList.toggle('preview-mode');
@@ -1470,6 +1528,26 @@ function mdToHtml(md){
   });
 })();
 
+// ====== Interview Report ======
+(function(){
+  var reportBtn=document.getElementById('interview-report-btn');
+  var reportArea=document.getElementById('interview-report-area');
+  if(!reportBtn||!reportArea) return;
+  // Load existing report
+  fetch('/api/interview').then(r=>r.json()).then(function(d){
+    if(d.report){reportArea.innerHTML=mdToHtml(d.report);reportArea.style.display='block';}
+  }).catch(function(){});
+  reportBtn.addEventListener('click',function(){
+    reportBtn.disabled=true;reportBtn.textContent='Generating...';
+    fetch('/api/interview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'report'})
+    }).then(r=>r.json()).then(function(d){
+      reportBtn.disabled=false;reportBtn.textContent='Report';
+      if(d.report){reportArea.innerHTML=mdToHtml(d.report);reportArea.style.display='block';}
+      else{alert(d.error||'Failed');}
+    }).catch(function(){reportBtn.disabled=false;reportBtn.textContent='Report';});
+  });
+})();
+
 // ====== AI Chat ======
 (function(){
   var messages=document.getElementById('chat-messages');
@@ -1628,6 +1706,16 @@ function mdToHtml(md){
       }
     }).catch(function(){});
   }, 30000);
+})();
+
+// ====== Trend Stats ======
+(function(){
+  var ts=D.trend_stats||{};
+  var el=document.getElementById('trend-stats');
+  if(!el) return;
+  function card(label,val,sub){return '<div style="background:var(--bg2);padding:10px 16px;border-radius:8px;min-width:120px;"><div style="font-size:20px;font-weight:bold;color:var(--accent)">'+val+'</div><div style="font-size:11px;color:var(--dim)">'+label+'</div>'+(sub?'<div style="font-size:11px;color:'+(sub.indexOf('+')>=0?'var(--green)':'var(--dim)')+'">'+sub+'</div>':'')+'</div>';}
+  var wc=ts.week_change>0?'+'+ts.week_change+'%':ts.week_change+'%';
+  el.innerHTML=card('This Week',ts.this_week||0,wc)+card('Last Week',ts.last_week||0,'')+card('This Month',ts.this_month||0,'')+card('Last Month',ts.last_month||0,'')+card('Avg Daily',ts.avg_daily||0,'last 30 days');
 })();
 
 // ====== Review Calendar ======
@@ -1906,10 +1994,11 @@ def serve_web(
                 self.end_headers()
                 self.wfile.write(body)
             elif self.path == "/api/interview":
-                from .resume import load_interview_questions, load_interview_chat
+                from .resume import load_interview_questions, load_interview_chat, load_interview_report
                 result = {
                     "questions": load_interview_questions(),
                     "chat_history": load_interview_chat(),
+                    "report": load_interview_report(),
                 }
                 body = json.dumps(result, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -2091,6 +2180,11 @@ def serve_web(
                 elif action == "clear":
                     clear_interview_chat()
                     result = {"ok": True}
+                elif action == "report":
+                    from .resume import generate_interview_report, load_interview_chat as _lic
+                    hist = _lic()
+                    report = generate_interview_report(hist)
+                    result = {"report": report} if report else {"error": "AI 未配置或对话为空"}
                 else:
                     result = {"error": "未知操作"}
                 body = json.dumps(result, ensure_ascii=False).encode("utf-8")
@@ -2161,6 +2255,13 @@ def serve_web(
                     from .resume import rename_resume
                     rename_resume(req.get("resume_id", ""), req.get("name", ""))
                     result = {"ok": True}
+                elif action == "list_versions":
+                    from .resume import get_resume_versions
+                    result = {"versions": get_resume_versions()}
+                elif action == "restore_version":
+                    from .resume import restore_resume_version
+                    content = restore_resume_version(req.get("file", ""))
+                    result = {"ok": True, "content": content}
                 else:
                     result = {"error": "unknown action"}
 

@@ -148,6 +148,54 @@ def _build_prompt(opt: dict, solution_info: dict) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# AI 调用量统计
+# ---------------------------------------------------------------------------
+
+from .config import DATA_DIR as _AI_DATA_DIR
+_USAGE_FILE = _AI_DATA_DIR / "ai_usage.json"
+
+
+def _load_usage() -> dict:
+    if _USAGE_FILE.exists():
+        try:
+            return json.loads(_USAGE_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {"total_calls": 0, "total_tokens": 0, "daily": {}}
+
+
+def _record_usage(tokens: int = 0):
+    """记录一次 AI 调用。"""
+    from datetime import date
+    usage = _load_usage()
+    usage["total_calls"] += 1
+    usage["total_tokens"] += tokens
+    today = date.today().isoformat()
+    day = usage.get("daily", {})
+    if today not in day:
+        day[today] = {"calls": 0, "tokens": 0}
+    day[today]["calls"] += 1
+    day[today]["tokens"] += tokens
+    # 只保留最近 90 天
+    keys = sorted(day.keys())
+    if len(keys) > 90:
+        for k in keys[:-90]:
+            del day[k]
+    usage["daily"] = day
+    _USAGE_FILE.write_text(json.dumps(usage, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_ai_usage() -> dict:
+    """返回 AI 调用统计。"""
+    return _load_usage()
+
+
+# ---------------------------------------------------------------------------
+# AI API 调用
+# ---------------------------------------------------------------------------
+
+
 def _call_claude(
     messages: list, config: dict, system: str = "",
 ) -> Optional[str]:
@@ -170,6 +218,10 @@ def _call_claude(
         resp = requests.post(url, json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data = resp.json()
+        # 统计 token
+        usage = data.get("usage", {})
+        tokens = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+        _record_usage(tokens)
         content = data.get("content", [])
         if content and content[0].get("type") == "text":
             return content[0]["text"]
@@ -200,6 +252,10 @@ def _call_openai(
         resp = requests.post(url, json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data = resp.json()
+        # 统计 token
+        usage = data.get("usage", {})
+        tokens = usage.get("total_tokens", 0) or (usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0))
+        _record_usage(tokens)
         choices = data.get("choices", [])
         if choices:
             return choices[0].get("message", {}).get("content")
