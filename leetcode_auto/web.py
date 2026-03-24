@@ -1074,7 +1074,7 @@ if(D.daily.length>0){
   var start=new Date(today);start.setDate(start.getDate()-365);
   var isLight=document.body.classList.contains('light');
   var bgColor=isLight?'#ebedf0':'#161b22';
-  var colors=isLight?['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39']:['#161b22','#0e4429','#006d32','#26a641','#39d353'];
+  var colors=isLight?['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39']:['#2d333b','#0e4429','#006d32','#26a641','#39d353'];
   chart.setOption({
     tooltip:{
       formatter:function(p){
@@ -1097,7 +1097,7 @@ if(D.daily.length>0){
     calendar:{
       range:[start.toISOString().slice(0,10),today.toISOString().slice(0,10)],
       cellSize:[14,14],
-      itemStyle:{borderWidth:4,borderColor:isLight?'#fff':'#0d1117',borderRadius:3},
+      itemStyle:{borderWidth:3,borderColor:isLight?'#fff':'#161b22',borderRadius:2},
       splitLine:{show:false},
       dayLabel:{color:'#8b949e',nameMap:['','Mon','','Wed','','Fri',''],fontSize:10,margin:8},
       monthLabel:{color:'#8b949e',fontSize:11,margin:12},
