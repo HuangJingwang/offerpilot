@@ -1097,7 +1097,7 @@ if(D.daily.length>0){
     calendar:{
       range:[start.toISOString().slice(0,10),today.toISOString().slice(0,10)],
       cellSize:[14,14],
-      itemStyle:{borderWidth:3,borderColor:isLight?'#fff':'#161b22',borderRadius:2},
+      itemStyle:{color:isLight?'#ebedf0':'#2d333b',borderWidth:3,borderColor:isLight?'#fff':'#161b22',borderRadius:2},
       splitLine:{show:false},
       dayLabel:{color:'#8b949e',nameMap:['','Mon','','Wed','','Fri',''],fontSize:10,margin:8},
       monthLabel:{color:'#8b949e',fontSize:11,margin:12},
