@@ -1196,18 +1196,16 @@ window.addEventListener('resize',function(){
   var newList=document.getElementById('today-new');
   var newCount=document.getElementById('new-count');
   var todos=D.new_todo||[];
-  var showNew=todos.slice(0,10);
   newCount.textContent=todos.length;
-  if(showNew.length===0){
+  if(todos.length===0){
     newList.innerHTML='<li style="color:var(--dim)">'+t('r1_done')+'</li>';
   } else {
     var h='';
-    showNew.forEach(function(t){
-      var dc=t.difficulty==='简单'?'diff-easy':t.difficulty==='困难'?'diff-hard':'diff-medium';
-      h+='<li><a href="https://leetcode.cn/problems/'+t.slug+'/" target="_blank">'+t.title+'</a>'
-        +'<div class="today-meta"><span class="tag tag-cat">'+t.category+'</span><span class="tag '+dc+'">'+t.difficulty+'</span></div></li>';
+    todos.forEach(function(item){
+      var dc=item.difficulty==='简单'?'diff-easy':item.difficulty==='困难'?'diff-hard':'diff-medium';
+      h+='<li><a href="https://leetcode.cn/problems/'+item.slug+'/" target="_blank">'+item.title+'</a>'
+        +'<div class="today-meta"><span class="tag tag-cat">'+item.category+'</span><span class="tag '+dc+'">'+item.difficulty+'</span></div></li>';
     });
-    if(todos.length>10) h+='<li style="color:var(--dim)">... '+t('remaining').replace('{n}',todos.length)+'</li>';
     newList.innerHTML=h;
   }
 
