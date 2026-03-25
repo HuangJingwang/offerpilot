@@ -170,6 +170,10 @@ def update_progress(rows: list[dict], today_slugs: set[str], today_str: str):
     for row in rows:
         if row["title_slug"] not in today_slugs:
             continue
+        # 如果今天已经填过某一轮，跳过（防止同一天多次同步重复填写）
+        already_filled_today = any(row[rk] == today_str for rk in ROUND_KEYS)
+        if already_filled_today:
+            continue
         is_new = not _is_round_done(row["r1"])
         filled = False
         for rk in ROUND_KEYS:
