@@ -72,7 +72,7 @@ def status():
             label = rk.upper()
             done = stats["per_round"][rk]
             filled = int(done / stats["total"] * bar_width) if stats["total"] else 0
-            bar = "█" * filled + "░" * (bar_width - filled)
+            bar = "#" * filled + "-" * (bar_width - filled)
             print(f"  {label} {bar} {done}/{stats['total']}")
         print(f"\n连续打卡：{streak} 天  累计：{total_days} 天  预估完成：{est}")
         if review_due:

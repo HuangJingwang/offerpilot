@@ -20,6 +20,10 @@ from .config import load_plan_config, save_plan_config
 from datetime import timedelta
 from .init_plan import SLUG_CATEGORY
 
+# Avoid concurrent browser-login flows from duplicate clicks or repeated requests.
+_LOGIN_LOCK = threading.Lock()
+_LOGIN_RUNNING = False
+
 # ---------------------------------------------------------------------------
 # 数据构建
 # ---------------------------------------------------------------------------
@@ -1921,27 +1925,7 @@ document.getElementById('export-csv-btn').addEventListener('click',function(){
 });
 
 // ====== Notes in Progress Table ======
-// Notes are shown when clicking a row - the renderTable function needs to include note rows
-var _origRenderTable=renderTable;
-renderTable=function(){
-  _origRenderTable();
-  // Add click handlers to toggle note rows
-  var tbody=document.getElementById('progress-body');
-  var trs=tbody.querySelectorAll('tr');
-  trs.forEach(function(tr,idx){
-    if(tr.className==='note-row') return;
-    tr.style.cursor='pointer';
-    tr.addEventListener('click',function(){
-      var noteRow=tr.nextElementSibling;
-      if(noteRow&&noteRow.className.indexOf('note-row')>=0){
-        noteRow.classList.toggle('show');
-      }
-    });
-  });
-};
-// Override renderTable to include note rows
-var _origRenderTable2=renderTable;
-renderTable=function(){
+function renderTable(){
   var search=document.getElementById('search-input').value.toLowerCase();
   var diffF=document.getElementById('filter-difficulty').value;
   var catF=document.getElementById('filter-category').value;
@@ -2102,6 +2086,63 @@ def serve_web(
         return html.encode("utf-8")
 
     class Handler(SimpleHTTPRequestHandler):
+        def _start_login(self):
+            global _LOGIN_RUNNING
+            from .leetcode_api import browser_login
+
+            with _LOGIN_LOCK:
+                if _LOGIN_RUNNING:
+                    result = {"status": "running"}
+                    body = json.dumps(result).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                _LOGIN_RUNNING = True
+
+            result = {"status": "started"}
+
+            def _do_login():
+                global _LOGIN_RUNNING
+                try:
+                    browser_login()
+                    # 登录成功后自动同步，避免用户手动刷新后仍是旧数据。
+                    from .sync import sync
+                    sync(interactive=False)
+                except Exception as e:
+                    print(f"Login failed: {e}")
+                finally:
+                    with _LOGIN_LOCK:
+                        _LOGIN_RUNNING = False
+
+            threading.Thread(target=_do_login, daemon=True).start()
+            body = json.dumps(result).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _start_sync(self):
+            result = {"status": "started"}
+
+            def _do_sync():
+                try:
+                    from .sync import sync
+                    sync(interactive=False)
+                except Exception as e:
+                    print(f"Sync failed: {e}")
+
+            threading.Thread(target=_do_sync, daemon=True).start()
+            body = json.dumps(result).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self):
             if self.path == "/api/chat/history":
                 from .ai_analyzer import load_chat_history
@@ -2163,41 +2204,10 @@ def serve_web(
                 self.wfile.write(body)
                 return
             elif self.path == "/api/sync":
-                import threading
-                from .sync import sync
-                result = {"status": "started"}
-                def _do_sync():
-                    try:
-                        sync(interactive=False)
-                    except Exception:
-                        pass
-                threading.Thread(target=_do_sync, daemon=True).start()
-                body = json.dumps(result).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                self._start_sync()
                 return
             elif self.path == "/api/login":
-                import threading
-                from .leetcode_api import browser_login
-                result = {"status": "started"}
-                def _do_login():
-                    try:
-                        browser_login()
-                        # 登录成功后自动同步
-                        from .sync import sync
-                        sync(interactive=False)
-                    except Exception:
-                        pass
-                threading.Thread(target=_do_login, daemon=True).start()
-                body = json.dumps(result).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                self._start_login()
                 return
             elif self.path == "/api/data":
                 fresh = _reload_data()
@@ -2216,7 +2226,11 @@ def serve_web(
                 self.wfile.write(page)
 
         def do_POST(self):
-            if self.path == "/api/chat":
+            if self.path == "/api/login":
+                self._start_login()
+            elif self.path == "/api/sync":
+                self._start_sync()
+            elif self.path == "/api/chat":
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length)
                 try:
@@ -2234,7 +2248,7 @@ def serve_web(
                 else:
                     from .ai_analyzer import (
                         build_chat_context, chat as ai_chat,
-                        save_chat_history,
+                        save_chat_history, get_last_ai_error,
                     )
                     system_prompt = build_chat_context()
                     reply = ai_chat(msg, history, system_prompt)
@@ -2244,7 +2258,7 @@ def serve_web(
                         save_chat_history(history)
                         result = {"reply": reply}
                     else:
-                        result = {"error": "AI 请求失败，请重试"}
+                        result = {"error": get_last_ai_error() or "AI 请求失败，请重试"}
 
                 body = json.dumps(result, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
@@ -2341,12 +2355,13 @@ def serve_web(
                     load_resume, generate_interview_questions,
                     chat_interview, save_interview_chat, clear_interview_chat,
                 )
+                from .ai_analyzer import get_last_ai_error
                 if action == "generate":
                     content = req.get("content", "")
                     from .resume import save_resume as _sr
                     _sr(content)
                     questions = generate_interview_questions(content)
-                    result = {"questions": questions} if questions else {"error": "AI 未配置或请求失败"}
+                    result = {"questions": questions} if questions else {"error": get_last_ai_error() or "AI 未配置或请求失败"}
                 elif action == "start":
                     resume_content = load_resume()
                     if not resume_content:
@@ -2357,7 +2372,7 @@ def serve_web(
                             save_interview_chat([{"role": "assistant", "content": reply}])
                             result = {"reply": reply}
                         else:
-                            result = {"error": "AI 未配置或请求失败"}
+                            result = {"error": get_last_ai_error() or "AI 未配置或请求失败"}
                 elif action == "chat":
                     msg = req.get("message", "")
                     history = req.get("history", [])
@@ -2369,7 +2384,7 @@ def serve_web(
                         save_interview_chat(history)
                         result = {"reply": reply}
                     else:
-                        result = {"error": "AI 未配置或请求失败"}
+                        result = {"error": get_last_ai_error() or "AI 未配置或请求失败"}
                 elif action == "clear":
                     clear_interview_chat()
                     result = {"ok": True}
@@ -2400,6 +2415,7 @@ def serve_web(
                     save_analysis, load_analysis,
                     chat_resume, save_resume_chat, clear_resume_chat,
                 )
+                from .ai_analyzer import get_last_ai_error
 
                 if action == "save":
                     save_resume(req.get("content", ""))
@@ -2412,7 +2428,7 @@ def serve_web(
                         save_analysis({"text": analysis})
                         result = {"analysis": analysis}
                     else:
-                        result = {"error": "AI not configured or request failed"}
+                        result = {"error": get_last_ai_error() or "AI not configured or request failed"}
                 elif action == "chat":
                     msg = req.get("message", "")
                     history = req.get("history", [])
@@ -2428,7 +2444,7 @@ def serve_web(
                         save_resume_chat(history)
                         result = {"reply": reply}
                     else:
-                        result = {"error": "AI not configured or request failed"}
+                        result = {"error": get_last_ai_error() or "AI not configured or request failed"}
                 elif action == "clear_chat":
                     clear_resume_chat()
                     result = {"ok": True}

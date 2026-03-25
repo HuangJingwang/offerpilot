@@ -39,7 +39,8 @@ LeetCode auto-sync, spaced repetition, AI code review, resume polish, mock inter
 
 ```bash
 git clone https://github.com/HuangJingwang/brushup.git
-cd leetcode_auto && pip install -e .
+cd brushup
+pip install -e .
 
 leetcode --web     # opens web dashboard, login from browser
 ```

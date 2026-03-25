@@ -39,7 +39,8 @@
 
 ```bash
 git clone https://github.com/HuangJingwang/brushup.git
-cd leetcode_auto && pip install -e .
+cd brushup
+pip install -e .
 
 leetcode --web     # 打开 Web 看板，在页面上完成登录
 ```

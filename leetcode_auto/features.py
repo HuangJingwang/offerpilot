@@ -1,6 +1,7 @@
 """可视化与高级分析功能：Rich TUI、热力图、SVG 徽章、薄弱点分析、周报。"""
 
 import re
+import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -23,6 +24,11 @@ def _is_done(val: str) -> bool:
 def _display_title(raw_title: str) -> str:
     m = re.search(r"\[(.+?)\]", raw_title)
     return m.group(1) if m else raw_title
+
+
+def _supports_unicode_output() -> bool:
+    encoding = (getattr(sys.stdout, "encoding", "") or "").lower()
+    return "utf" in encoding or encoding == "cp65001"
 
 
 def parse_checkin_data(filepath) -> list[dict]:
@@ -79,6 +85,9 @@ def rich_status(rows, stats, review_due, streak, total_days, est, checkin_data):
         from rich import box
     except ImportError:
         print("提示：安装 rich 可获得更好的视觉体验  pip install rich")
+        return False
+
+    if not _supports_unicode_output():
         return False
 
     console = Console()
@@ -183,6 +192,10 @@ def rich_status(rows, stats, review_due, streak, total_days, est, checkin_data):
 
 def render_heatmap(checkin_data: list[dict], weeks: int = 26):
     """在终端渲染 GitHub 风格的刷题热力图。"""
+    if not _supports_unicode_output():
+        _render_heatmap_plain(checkin_data, weeks)
+        return
+
     try:
         from rich.console import Console
         from rich.text import Text
@@ -273,7 +286,7 @@ def _render_heatmap_plain(checkin_data, weeks=26):
     start = today - timedelta(days=total_days - 1)
     start = start - timedelta(days=start.weekday())
 
-    chars = ["░", "▒", "▓", "█"]
+    chars = [".", ":", "*", "#"]
     day_labels = ["Mon", "   ", "Wed", "   ", "Fri", "   ", "Sun"]
 
     print(f"\n=== 刷题热力图（近 {weeks} 周）===\n")
@@ -286,7 +299,7 @@ def _render_heatmap_plain(checkin_data, weeks=26):
             line += chars[idx] + " "
             d += timedelta(days=7)
         print(line)
-    print(f"\n ░ 0题  ▒ 1-2题  ▓ 3-4题  █ 5+题\n")
+    print("\n . 0题  : 1-2题  * 3-4题  # 5+题\n")
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +378,9 @@ def print_weakness_analysis(rows):
     except ImportError:
         has_rich = False
 
+    if has_rich and not _supports_unicode_output():
+        has_rich = False
+
     cat_stats = compute_category_stats(rows)
     sorted_cats = sorted(cat_stats.items(), key=lambda x: x[1]["done_r1"] / max(x[1]["total"], 1))
 
@@ -420,7 +436,7 @@ def print_weakness_analysis(rows):
         print("\n=== 分类薄弱点分析 ===\n")
         for cat_name, cs in sorted_cats:
             r1_pct = cs["done_r1"] / cs["total"] if cs["total"] else 0
-            bar = "█" * int(r1_pct * 10) + "░" * (10 - int(r1_pct * 10))
+            bar = "#" * int(r1_pct * 10) + "-" * (10 - int(r1_pct * 10))
             print(f"  {cat_name:<8} {bar} {r1_pct:.0%} ({cs['done_r1']}/{cs['total']})")
         print()
 

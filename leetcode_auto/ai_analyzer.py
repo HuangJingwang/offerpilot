@@ -154,6 +154,36 @@ def _build_prompt(opt: dict, solution_info: dict) -> str:
 
 from .config import DATA_DIR as _AI_DATA_DIR
 _USAGE_FILE = _AI_DATA_DIR / "ai_usage.json"
+_LAST_AI_ERROR = ""
+
+
+def _set_last_ai_error(message: str):
+    global _LAST_AI_ERROR
+    _LAST_AI_ERROR = message
+
+
+def get_last_ai_error() -> str:
+    return _LAST_AI_ERROR
+
+
+def _format_http_error(e: requests.HTTPError) -> str:
+    resp = e.response
+    if resp is None:
+        return str(e)
+    detail = ""
+    try:
+        data = resp.json()
+        if isinstance(data, dict):
+            err = data.get("error")
+            if isinstance(err, dict):
+                detail = err.get("message") or ""
+            elif isinstance(err, str):
+                detail = err
+    except ValueError:
+        detail = (resp.text or "").strip()
+    if detail:
+        return f"HTTP {resp.status_code}: {detail}"
+    return f"HTTP {resp.status_code}: {str(e)}"
 
 
 def _load_usage() -> dict:
@@ -218,6 +248,7 @@ def _call_claude(
         resp = requests.post(url, json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data = resp.json()
+        _set_last_ai_error("")
         # 统计 token
         usage = data.get("usage", {})
         tokens = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
@@ -225,7 +256,12 @@ def _call_claude(
         content = data.get("content", [])
         if content and content[0].get("type") == "text":
             return content[0]["text"]
+    except requests.HTTPError as e:
+        msg = _format_http_error(e)
+        _set_last_ai_error(msg)
+        print(f"   Claude API 调用失败: {msg}")
     except Exception as e:
+        _set_last_ai_error(str(e))
         print(f"   Claude API 调用失败: {e}")
     return None
 
@@ -252,6 +288,7 @@ def _call_openai(
         resp = requests.post(url, json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data = resp.json()
+        _set_last_ai_error("")
         # 统计 token
         usage = data.get("usage", {})
         tokens = usage.get("total_tokens", 0) or (usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0))
@@ -259,7 +296,12 @@ def _call_openai(
         choices = data.get("choices", [])
         if choices:
             return choices[0].get("message", {}).get("content")
+    except requests.HTTPError as e:
+        msg = _format_http_error(e)
+        _set_last_ai_error(msg)
+        print(f"   OpenAI API 调用失败: {msg}")
     except Exception as e:
+        _set_last_ai_error(str(e))
         print(f"   OpenAI API 调用失败: {e}")
     return None
 
