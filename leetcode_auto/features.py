@@ -611,7 +611,14 @@ def _build_report_email(md: str) -> str:
 
 def push_report(content: str):
     """Push weekly report via webhook and/or email."""
-    from .config import WEBHOOK_URL, SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_TO, SMTP_PORT
+    from .config import load_push_config
+    pc = load_push_config()
+    WEBHOOK_URL = pc["webhook_url"]
+    SMTP_HOST = pc["smtp_host"]
+    SMTP_PORT = pc["smtp_port"]
+    SMTP_USER = pc["smtp_user"]
+    SMTP_PASS = pc["smtp_pass"]
+    SMTP_TO = pc["smtp_to"]
     import requests as _req
 
     sent = False

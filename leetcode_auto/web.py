@@ -16,7 +16,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Optional
 
 from .features import ROUND_KEYS, compute_category_stats
-from .config import load_plan_config, save_plan_config
+from .config import load_plan_config, save_plan_config, load_push_config, save_push_config
 from datetime import timedelta
 from .init_plan import SLUG_CATEGORY
 
@@ -185,6 +185,7 @@ def _build_comprehensive_data(
         "ai_usage": __import__('leetcode_auto.ai_analyzer', fromlist=['get_ai_usage']).get_ai_usage(),
         "user_profile": __import__('leetcode_auto.leetcode_api', fromlist=['load_user_profile']).load_user_profile(),
         "struggles": __import__('leetcode_auto.leetcode_api', fromlist=['load_struggle_notebook']).load_struggle_notebook(),
+        "push_config": {k: v for k, v in load_push_config().items() if k != "smtp_pass"},
         "trend_stats": _compute_trends(checkin_data),
         "available_lists": {k: {"name": v["name"], "name_en": v["name_en"], "count": len(v["problems"])} for k, v in __import__('leetcode_auto.problem_lists', fromlist=['PROBLEM_LISTS']).PROBLEM_LISTS.items()},
         "problem_data": get_all_problem_data(),
@@ -858,6 +859,44 @@ body.light .chat-msg.user .chat-bubble { background:linear-gradient(135deg,#0969
   <div class="pace-card">
     <h3>AI Usage</h3>
     <div class="usage-grid" id="ai-usage-display"></div>
+  </div>
+  <div class="pace-card">
+    <h3>Weekly Report Push</h3>
+    <div class="settings-row" style="margin-top:10px">
+      <div class="settings-group">
+        <label>Email (QQ/Gmail/etc)</label>
+        <input type="email" id="set-smtp-to" placeholder="your@email.com">
+      </div>
+      <div class="settings-group">
+        <label>SMTP Host</label>
+        <input type="text" id="set-smtp-host" placeholder="smtp.qq.com">
+      </div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-group">
+        <label>SMTP User</label>
+        <input type="text" id="set-smtp-user" placeholder="your@email.com">
+      </div>
+      <div class="settings-group">
+        <label>SMTP Password</label>
+        <input type="password" id="set-smtp-pass" placeholder="authorization code">
+      </div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-group">
+        <label>Webhook URL (Slack/Feishu)</label>
+        <input type="text" id="set-webhook" placeholder="https://...">
+      </div>
+      <div class="settings-group">
+        <label>SMTP Port</label>
+        <input type="number" id="set-smtp-port" value="587" style="width:100px">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="settings-save-btn" id="push-config-save">Save Push Config</button>
+      <button class="settings-save-btn" id="push-test-btn" style="background:var(--green)">Test Send</button>
+    </div>
+    <div id="push-status" style="font-size:12px;color:var(--dim);margin-top:8px"></div>
   </div>
 </div>
 
@@ -1883,6 +1922,51 @@ function mdToHtml(md){
   document.getElementById('set-deadline').addEventListener('change',updatePace);
   document.getElementById('set-daily-new').addEventListener('change',updatePace);
 
+  // Push config
+  var pc=D.push_config||{};
+  document.getElementById('set-smtp-to').value=pc.smtp_to||'';
+  document.getElementById('set-smtp-host').value=pc.smtp_host||'';
+  document.getElementById('set-smtp-user').value=pc.smtp_user||'';
+  document.getElementById('set-smtp-port').value=pc.smtp_port||587;
+  document.getElementById('set-webhook').value=pc.webhook_url||'';
+
+  document.getElementById('push-config-save').addEventListener('click',function(){
+    var cfg={
+      smtp_to:document.getElementById('set-smtp-to').value,
+      smtp_host:document.getElementById('set-smtp-host').value,
+      smtp_user:document.getElementById('set-smtp-user').value,
+      smtp_pass:document.getElementById('set-smtp-pass').value,
+      smtp_port:parseInt(document.getElementById('set-smtp-port').value)||587,
+      webhook_url:document.getElementById('set-webhook').value,
+    };
+    fetch('/api/push-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'save',config:cfg})
+    }).then(r=>r.json()).then(function(d){
+      document.getElementById('push-status').textContent=d.ok?'Saved!':'Error';
+    });
+  });
+
+  document.getElementById('push-test-btn').addEventListener('click',function(){
+    // Save first, then test
+    var cfg={
+      smtp_to:document.getElementById('set-smtp-to').value,
+      smtp_host:document.getElementById('set-smtp-host').value,
+      smtp_user:document.getElementById('set-smtp-user').value,
+      smtp_pass:document.getElementById('set-smtp-pass').value,
+      smtp_port:parseInt(document.getElementById('set-smtp-port').value)||587,
+      webhook_url:document.getElementById('set-webhook').value,
+    };
+    document.getElementById('push-status').textContent='Sending...';
+    fetch('/api/push-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'save',config:cfg})
+    }).then(function(){
+      return fetch('/api/push-config',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'test'})});
+    }).then(r=>r.json()).then(function(d){
+      document.getElementById('push-status').textContent=d.ok?'Test sent! Check your inbox.':'Failed';
+    });
+  });
+
   document.getElementById('settings-save-btn').addEventListener('click',function(){
     var intervals=document.getElementById('set-intervals').value.split(',').map(function(s){return parseInt(s.trim())}).filter(function(n){return !isNaN(n)&&n>0});
     var newCfg={
@@ -2378,6 +2462,29 @@ def serve_web(
                     result = {"ok": True}
                 elif action == "add_time":
                     add_time_spent(req.get("slug", ""), req.get("seconds", 0))
+                    result = {"ok": True}
+                else:
+                    result = {"error": "unknown"}
+                body = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == "/api/push-config":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                try:
+                    req = json.loads(raw)
+                except (json.JSONDecodeError, ValueError):
+                    req = {}
+                action = req.get("action", "save")
+                if action == "save":
+                    save_push_config(req.get("config", {}))
+                    result = {"ok": True}
+                elif action == "test":
+                    from .features import push_report
+                    push_report("BrushUp Test: If you see this, push is working!")
                     result = {"ok": True}
                 else:
                     result = {"error": "unknown"}
