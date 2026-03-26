@@ -215,6 +215,16 @@ def cmd_remind_daemon(arg: str):
         install_remind_daemon()
 
 
+def cmd_report_daemon(arg: str):
+    from .daemon import install_report_daemon, uninstall_report_daemon, report_daemon_status
+    if arg == "status":
+        report_daemon_status()
+    elif arg == "stop":
+        uninstall_report_daemon()
+    else:
+        install_report_daemon()
+
+
 def cmd_report_push():
     """Generate weekly report and push via webhook/email."""
     from .features import generate_weekly_report, parse_checkin_data, push_report
@@ -426,6 +436,9 @@ def main():
                         help="前台定时同步（终端保持运行）")
     parser.add_argument("--report-push", action="store_true",
                         help="Generate and push weekly report (webhook/email)")
+    parser.add_argument("--report-daemon", nargs="?", const="start",
+                        metavar="ACTION",
+                        help="Auto weekly report: start/status/stop (Sunday 20:00)")
     parser.add_argument("--export", metavar="FILE",
                         help="Export all data to a zip file")
     parser.add_argument("--import-data", metavar="FILE",
@@ -458,6 +471,8 @@ def main():
         cmd_remind_daemon(args.remind_daemon)
     elif args.report_push:
         cmd_report_push()
+    elif args.report_daemon is not None:
+        cmd_report_daemon(args.report_daemon)
     elif args.export:
         cmd_export(args.export)
     elif args.import_data:

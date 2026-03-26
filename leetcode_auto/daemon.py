@@ -692,3 +692,138 @@ def remind_daemon_status():
         _status_remind_windows()
     else:
         print(f"不支持的系统：{system}")
+
+
+# ---------------------------------------------------------------------------
+# 周报自动推送守护（每周日 20:00）
+# ---------------------------------------------------------------------------
+
+REPORT_SERVICE_ID = "com.brushup.report"
+_REPORT_PLIST_FILE = _PLIST_DIR / f"{REPORT_SERVICE_ID}.plist"
+_REPORT_SERVICE_FILE = _SYSTEMD_DIR / "brushup-report.service"
+_REPORT_TIMER_FILE = _SYSTEMD_DIR / "brushup-report.timer"
+_REPORT_TASK_NAME = "BrushUp-Report"
+REPORT_LOG_FILE = DATA_DIR / "report.log"
+
+
+def _report_plist_content() -> str:
+    prog = _plist_program_args(["--report-push"])
+    path_env = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{REPORT_SERVICE_ID}</string>
+    <key>ProgramArguments</key>
+    <array>
+{prog}
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>20</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{REPORT_LOG_FILE}</string>
+    <key>StandardErrorPath</key>
+    <string>{REPORT_LOG_FILE}</string>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{path_env}</string>
+    </dict>
+</dict>
+</plist>"""
+
+
+def _install_report_macos():
+    _PLIST_DIR.mkdir(parents=True, exist_ok=True)
+    if _REPORT_PLIST_FILE.exists():
+        subprocess.run(["launchctl", "unload", str(_REPORT_PLIST_FILE)], capture_output=True)
+        _REPORT_PLIST_FILE.unlink()
+    _REPORT_PLIST_FILE.write_text(_report_plist_content(), encoding="utf-8")
+    subprocess.run(["launchctl", "load", str(_REPORT_PLIST_FILE)], check=True)
+
+
+def _install_report_linux():
+    lc_bin = _find_leetcode_bin()
+    _SYSTEMD_DIR.mkdir(parents=True, exist_ok=True)
+    _REPORT_SERVICE_FILE.write_text(
+        f"[Unit]\nDescription=BrushUp weekly report\n\n"
+        f"[Service]\nType=oneshot\nExecStart={lc_bin} --report-push\n"
+        f"StandardOutput=append:{REPORT_LOG_FILE}\nStandardError=append:{REPORT_LOG_FILE}\n"
+        f"Environment=PATH={os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}\n",
+        encoding="utf-8")
+    _REPORT_TIMER_FILE.write_text(
+        "[Unit]\nDescription=BrushUp weekly report timer\n\n"
+        "[Timer]\nOnCalendar=Sun 20:00:00\nPersistent=true\n\n"
+        "[Install]\nWantedBy=timers.target\n", encoding="utf-8")
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "--now", "brushup-report.timer"], check=True)
+
+
+def _install_report_windows():
+    lc_bin = _find_leetcode_bin()
+    subprocess.run(["schtasks", "/create", "/tn", _REPORT_TASK_NAME,
+                    "/tr", f'cmd /c "{lc_bin} --report-push"',
+                    "/sc", "weekly", "/d", "SUN", "/st", "20:00", "/f"], check=True)
+
+
+def _unload_report(quiet=False):
+    system = platform.system()
+    if system == "Darwin":
+        if _REPORT_PLIST_FILE.exists():
+            subprocess.run(["launchctl", "unload", str(_REPORT_PLIST_FILE)], capture_output=True)
+            _REPORT_PLIST_FILE.unlink()
+    elif system == "Linux":
+        subprocess.run(["systemctl", "--user", "disable", "--now", "brushup-report.timer"], capture_output=True)
+        for f in (_REPORT_SERVICE_FILE, _REPORT_TIMER_FILE):
+            if f.exists(): f.unlink()
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+    elif system == "Windows":
+        subprocess.run(["schtasks", "/delete", "/tn", _REPORT_TASK_NAME, "/f"], capture_output=True)
+    if not quiet:
+        print("Weekly report daemon stopped.")
+
+
+def install_report_daemon():
+    system = platform.system()
+    if system == "Darwin":
+        _install_report_macos()
+    elif system == "Linux":
+        _install_report_linux()
+    elif system == "Windows":
+        _install_report_windows()
+    else:
+        print(f"Unsupported: {system}"); return
+    print("Weekly report registered: every Sunday 20:00")
+    print("Stop: leetcode --report-daemon stop")
+
+
+def uninstall_report_daemon():
+    _unload_report()
+
+
+def report_daemon_status():
+    system = platform.system()
+    if system == "Darwin":
+        result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
+        found = any(REPORT_SERVICE_ID in l for l in result.stdout.splitlines())
+        print(f"Weekly report: {'registered (Sun 20:00)' if found else 'not registered'}")
+    elif system == "Linux":
+        result = subprocess.run(["systemctl", "--user", "is-active", "brushup-report.timer"],
+                                capture_output=True, text=True)
+        active = result.stdout.strip() == "active"
+        print(f"Weekly report: {'registered (Sun 20:00)' if active else 'not registered'}")
+    elif system == "Windows":
+        result = subprocess.run(["schtasks", "/query", "/tn", _REPORT_TASK_NAME], capture_output=True)
+        print(f"Weekly report: {'registered (Sun 20:00)' if result.returncode == 0 else 'not registered'}")
+    print(f"Log: {REPORT_LOG_FILE}")
