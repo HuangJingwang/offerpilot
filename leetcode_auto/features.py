@@ -555,12 +555,25 @@ def push_report(content: str):
         except Exception as e:
             print(f"  Webhook failed: {e}")
 
-    # Email
+    # Email (convert Markdown to HTML)
     if SMTP_HOST and SMTP_USER and SMTP_TO:
         try:
-            import smtplib
+            import smtplib, re
             from email.mime.text import MIMEText
-            msg = MIMEText(content, "plain", "utf-8")
+            # Simple Markdown to HTML
+            html = content
+            html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.M)
+            html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.M)
+            html = re.sub(r'^- (.+)$', r'<li>\1</li>', html, flags=re.M)
+            html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+            html = re.sub(r'\n\|(.+)\|\n\|[-| :]+\|\n', lambda m: '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">' + m.group(0), html)
+            html = re.sub(r'^\|(.+)\|$', lambda m: '<tr>' + ''.join(f'<td>{c.strip()}</td>' for c in m.group(1).split('|')) + '</tr>', html, flags=re.M)
+            html = re.sub(r'^>(.+)$', r'<blockquote>\1</blockquote>', html, flags=re.M)
+            html = html.replace('\n', '<br>\n')
+            html_body = f"""<div style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
+{html}
+</div>"""
+            msg = MIMEText(html_body, "html", "utf-8")
             msg["Subject"] = "BrushUp Weekly Report"
             msg["From"] = SMTP_USER
             msg["To"] = SMTP_TO
