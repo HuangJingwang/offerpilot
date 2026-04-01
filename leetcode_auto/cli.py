@@ -126,19 +126,22 @@ def cmd_badge():
 
 
 def cmd_web(port: int):
-    from .features import parse_checkin_data
-    from .web import serve_web
+    import uvicorn
+    import webbrowser
+    import threading
+    from .app import create_app
+    from .init_plan import ensure_plan_files
+    from .config import PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE
+
     ensure_plan_files(PLAN_DIR, PROGRESS_FILE, CHECKIN_FILE, DASHBOARD_FILE)
-    _, rows = parse_progress_table(PROGRESS_FILE)
-    stats = _compute_stats(rows)
-    checkin_data = parse_checkin_data(CHECKIN_FILE)
-    streak, total_days = _compute_streak(CHECKIN_FILE)
-    today_date = date.today()
-    review_due = _get_review_due(rows, today_date)
-    est = _estimate_completion(stats, total_days)
-    optimizations = _load_optimizations()
-    serve_web(rows, stats, checkin_data, streak, total_days,
-              review_due, optimizations, est, port)
+
+    app = create_app()
+    url = f"http://127.0.0.1:{port}"
+    print(f"Web 看板已启动：{url}")
+    print("按 Ctrl+C 停止\n")
+
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
 def cmd_weakness():
